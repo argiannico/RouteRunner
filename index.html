@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#1e40af">
 <title>RouteRunner</title>
 <link rel="manifest" href="/manifest.json">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -19,7 +19,6 @@
 }
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--text);overflow:hidden}
 #map{position:absolute;inset:0;z-index:1}
-.leaflet-control-attribution{font-size:9px!important;opacity:.6}
 
 /* Setup modal */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -40,6 +39,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .divider::before{left:0}.divider::after{right:0}
 .field{margin-bottom:12px}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hint{font-size:11px;color:var(--muted);margin-top:4px}
+.hint a{color:var(--blue)}
 
 /* Column mapping preview */
 .preview-table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0;border-radius:8px;overflow:hidden}
@@ -54,7 +55,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 /* Panel (sidebar on desktop, bottom sheet on mobile) */
 .panel{position:fixed;z-index:400;background:var(--card);display:flex;flex-direction:column;transition:transform .3s ease}
 
-/* Mobile: bottom sheet */
 @media(max-width:767px){
   .fab-group{top:12px}
   .panel{bottom:0;left:0;right:0;border-radius:16px 16px 0 0;max-height:70vh;box-shadow:0 -4px 20px rgba(0,0,0,.1);transform:translateY(calc(100% - 120px))}
@@ -62,7 +62,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   .panel-handle{width:36px;height:4px;background:var(--muted);border-radius:2px;margin:8px auto;opacity:.4}
 }
 
-/* Desktop: left sidebar */
 @media(min-width:768px){
   .fab-group{top:16px}
   .panel{top:0;left:0;bottom:0;width:var(--panel-w);box-shadow:4px 0 16px rgba(0,0,0,.06);border-right:1px solid var(--border)}
@@ -73,11 +72,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .panel-header{padding:16px 16px 0;flex-shrink:0}
 .panel-header h1{font-size:18px;font-weight:700}
 .panel-header .status{font-size:12px;color:var(--muted);margin-top:2px}
-
 .tabs{display:flex;gap:0;padding:8px 16px 0;flex-shrink:0;border-bottom:1px solid var(--border)}
 .tab{flex:1;padding:8px 0;border:none;background:none;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
 .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
-
 .tab-content{display:none;flex:1;overflow-y:auto;padding:12px 16px}
 .tab-content.active{display:block}
 
@@ -112,21 +109,16 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .route-summary .label{font-size:11px;color:var(--muted)}
 .route-actions{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 
-/* Search */
 .search-box{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;margin-bottom:12px}
 .search-box:focus{border-color:var(--blue)}
-
-/* Filter bar */
 .filter-bar{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
 .filter-chip{padding:4px 10px;border-radius:12px;border:1px solid var(--border);background:var(--card);font-size:12px;cursor:pointer;font-weight:500}
 .filter-chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 
-/* Progress */
 .progress-bar{width:100%;height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin:8px 0}
 .progress-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .3s}
 .progress-text{font-size:12px;color:var(--muted);text-align:center}
 
-/* Toast notification */
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:900;background:var(--card);border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.15);display:flex;align-items:center;gap:12px;max-width:360px;width:calc(100% - 32px);animation:slideDown .3s ease}
 @keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .toast .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
@@ -135,14 +127,13 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .toast .toast-detail{font-size:12px;color:var(--muted)}
 .toast .toast-close{background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;padding:4px}
 
-/* Empty state */
 .empty{text-align:center;padding:40px 20px;color:var(--muted)}
 .empty .icon{font-size:40px;margin-bottom:8px}
 .empty p{font-size:13px;line-height:1.5}
 
-/* Leaflet popup customization */
-.leaflet-popup-content-wrapper{border-radius:10px!important;padding:0!important}
-.leaflet-popup-content{margin:12px!important;font-family:inherit!important;font-size:13px!important;line-height:1.4!important}
+/* Mapbox popup overrides */
+.mapboxgl-popup-content{border-radius:10px!important;padding:12px!important;font-family:inherit!important;font-size:13px!important;line-height:1.4!important;box-shadow:0 4px 16px rgba(0,0,0,.12)!important}
+.mapboxgl-popup-close-button{font-size:18px;padding:4px 8px;color:var(--muted)}
 .popup-name{font-weight:700;font-size:14px;margin-bottom:4px}
 .popup-addr{color:var(--muted);margin-bottom:6px}
 .popup-btns{display:flex;gap:6px;margin-top:8px}
@@ -150,42 +141,38 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .popup-btn-route{background:var(--blue);color:#fff}
 .popup-btn-nav{background:var(--bg);color:var(--text)}
 
-/* Numbered map markers */
-.numbered-marker{background:none!important;border:none!important}
-.marker-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+/* Map markers */
+.marker-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer;transition:transform .15s}
+.marker-circle:hover{transform:scale(1.15)}
+
+/* Hide Mapbox logo on mobile for more map space */
+@media(max-width:767px){.mapboxgl-ctrl-bottom-left{display:none}}
 </style>
 </head>
 <body>
 
 <div id="map"></div>
 
-<!-- Floating buttons -->
 <div class="fab-group">
   <button class="fab" onclick="centerOnMe()" title="My location">&#9737;</button>
   <button class="fab" onclick="toggleSettings()" title="Settings">&#9881;</button>
   <button class="fab" id="alert-toggle" onclick="toggleAlerts()" title="Toggle alerts">&#128276;</button>
 </div>
 
-<!-- Panel -->
 <div class="panel" id="panel">
   <div class="panel-handle" onclick="togglePanel()"></div>
   <div class="panel-header" onclick="togglePanel()">
     <h1>RouteRunner</h1>
     <div class="status" id="panel-status">Load your accounts to get started</div>
   </div>
-
   <div class="tabs">
     <button class="tab active" data-tab="nearby" onclick="switchTab('nearby')">Near Me</button>
     <button class="tab" data-tab="all" onclick="switchTab('all')">All</button>
     <button class="tab" data-tab="route" onclick="switchTab('route')">Route</button>
   </div>
-
   <div id="tab-nearby" class="tab-content active">
-    <div id="nearby-list">
-      <div class="empty"><div class="icon">&#128205;</div><p>Load your accounts and enable location to see nearby stops.</p></div>
-    </div>
+    <div id="nearby-list"><div class="empty"><div class="icon">&#128205;</div><p>Load your accounts and enable location to see nearby stops.</p></div></div>
   </div>
-
   <div id="tab-all" class="tab-content">
     <input class="search-box" id="search-input" placeholder="Search accounts..." oninput="renderAllList()">
     <div class="filter-bar" id="filter-bar">
@@ -197,11 +184,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     </div>
     <div id="all-list"></div>
   </div>
-
   <div id="tab-route" class="tab-content">
-    <div id="route-stops">
-      <div class="empty"><div class="icon">&#128663;</div><p>Tap "Add to Route" on any account to build your run.</p></div>
-    </div>
+    <div id="route-stops"><div class="empty"><div class="icon">&#128663;</div><p>Tap "Add to Route" on any account to build your run.</p></div></div>
     <div id="route-summary" class="route-summary" style="display:none">
       <div><div class="val" id="r-stops">0</div><div class="label">Stops</div></div>
       <div><div class="val" id="r-miles">0</div><div class="label">Miles</div></div>
@@ -225,6 +209,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <h2>Connect Your Accounts</h2>
     <p class="subtitle">Paste a Google Sheets URL or upload a file.</p>
 
+    <div class="field" id="token-field">
+      <label>Mapbox Access Token</label>
+      <input type="text" id="mapbox-token" placeholder="pk.eyJ1Ijo...">
+      <div class="hint">Free at <a href="https://account.mapbox.com/access-tokens/" target="_blank">mapbox.com/access-tokens</a> (50k views/mo)</div>
+    </div>
+
+    <hr style="margin:16px 0;border:none;border-top:1px solid var(--border)">
+
     <div class="field">
       <label>Google Sheets URL</label>
       <div class="input-row">
@@ -240,22 +232,13 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 
     <div id="load-error" style="color:var(--red);font-size:13px;margin-top:12px;display:none"></div>
 
-    <!-- Column mapping (shown after data loads) -->
     <div id="col-mapping" style="display:none">
       <hr style="margin:20px 0;border:none;border-top:1px solid var(--border)">
       <h3 style="font-size:16px;margin-bottom:4px">Map Your Columns</h3>
       <p class="subtitle">Confirm which columns have account info.</p>
-
       <div id="preview-container"></div>
-
-      <div class="field">
-        <label>Account Name</label>
-        <select id="col-name"></select>
-      </div>
-      <div class="field">
-        <label>Street Address</label>
-        <select id="col-address"></select>
-      </div>
+      <div class="field"><label>Account Name</label><select id="col-name"></select></div>
+      <div class="field"><label>Street Address</label><select id="col-address"></select></div>
       <div class="field-row">
         <div class="field"><label>City</label><select id="col-city"></select></div>
         <div class="field"><label>State</label><select id="col-state"></select></div>
@@ -268,16 +251,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
         <label>Last Order Date <span style="font-weight:400;color:var(--muted)">(for status tracking)</span></label>
         <select id="col-lastorder"></select>
       </div>
-      <div class="field">
-        <label>Notes</label>
-        <select id="col-notes"></select>
-      </div>
-
+      <div class="field"><label>Notes</label><select id="col-notes"></select></div>
       <div id="geocode-progress" style="display:none;margin:16px 0">
         <div class="progress-bar"><div class="progress-fill" id="geo-progress-fill"></div></div>
         <div class="progress-text" id="geo-progress-text">Geocoding addresses...</div>
       </div>
-
       <button class="btn btn-primary btn-full" id="confirm-btn" onclick="confirmMapping()" style="margin-top:16px">Load Accounts</button>
     </div>
   </div>
@@ -306,81 +284,131 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   <button class="toast-close" onclick="dismissToast()">&times;</button>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ── State ──
 let accounts = [];
-let rawData = null;
-let rawHeaders = [];
-let map, markersLayer, routeLayer, userMarker, accuracyCircle;
+let rawData = null, rawHeaders = [];
+let map, geolocateCtrl;
+let mapMarkers = [];
 let userLat = null, userLng = null;
-let watchId = null;
 let alertsEnabled = true;
 let alertedThisSession = new Set();
 let currentFilter = 'all';
-let routeStops = []; // account IDs in route
+let routeStops = [];
 let routeOptimized = false;
 let routeLegs = [];
+let mapReady = false;
 
-let ALERT_RADIUS = parseInt(localStorage.getItem('rr_alert_radius')) || 250; // ~2 city blocks
-let alertCircle = null;
+let ALERT_RADIUS = parseInt(localStorage.getItem('rr_alert_radius')) || 250;
 const STATUS_COLORS = {active:'#16a34a',recent:'#d97706',lapsed:'#dc2626',prospect:'#6366f1',unknown:'#94a3b8'};
 const STATUS_LABELS = {active:'Active',recent:'Follow Up',lapsed:'Lapsed',prospect:'Prospect',unknown:'Unknown'};
 
 // ── Map init ──
 function initMap() {
-  map = L.map('map', {zoomControl: false}).setView([40.73, -73.99], 13);
-  L.control.zoom({position:'topright'}).addTo(map);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '&copy; OpenStreetMap'
-  }).addTo(map);
-  markersLayer = L.layerGroup().addTo(map);
-  routeLayer = L.layerGroup().addTo(map);
+  const token = localStorage.getItem('rr_mapbox_token') || '';
+  mapboxgl.accessToken = token;
+
+  if (token) document.getElementById('token-field').style.display = 'none';
+
+  map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v12',
+    center: [-73.99, 40.73],
+    zoom: 13
+  });
+
+  map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+
+  // GPS tracking via built-in control
+  geolocateCtrl = new mapboxgl.GeolocateControl({
+    positionOptions: {enableHighAccuracy: true},
+    trackUserLocation: true,
+    showUserHeading: true
+  });
+  map.addControl(geolocateCtrl, 'top-right');
+
+  geolocateCtrl.on('geolocate', e => {
+    userLat = e.coords.latitude;
+    userLng = e.coords.longitude;
+    updateAlertCircle();
+    checkProximity();
+    renderNearbyList();
+  });
+
+  map.on('load', () => {
+    mapReady = true;
+
+    // Boost subway/transit visibility
+    const style = map.getStyle();
+    if (style && style.layers) {
+      style.layers.forEach(layer => {
+        if (layer.id.includes('transit') && layer.type === 'line') {
+          map.setPaintProperty(layer.id, 'line-width', 3);
+          map.setPaintProperty(layer.id, 'line-opacity', 0.85);
+        }
+      });
+    }
+
+    // Alert radius circle (empty until GPS fires)
+    map.addSource('alert-radius', {
+      type: 'geojson',
+      data: {type:'Feature', geometry:{type:'Polygon', coordinates:[[]]}}
+    });
+    map.addLayer({
+      id: 'alert-radius-fill', type: 'fill', source: 'alert-radius',
+      paint: {'fill-color':'#ef4444', 'fill-opacity':0.06}
+    });
+    map.addLayer({
+      id: 'alert-radius-line', type: 'line', source: 'alert-radius',
+      paint: {'line-color':'#ef4444', 'line-width':1.5, 'line-dasharray':[4,3]}
+    });
+
+    // Route line source (empty until optimized)
+    map.addSource('route-line', {
+      type: 'geojson',
+      data: {type:'Feature', geometry:{type:'LineString', coordinates:[]}}
+    });
+    map.addLayer({
+      id: 'route-line-bg', type: 'line', source: 'route-line',
+      layout: {'line-join':'round', 'line-cap':'round'},
+      paint: {'line-color':'#1d4ed8', 'line-width':7, 'line-opacity':0.25}
+    });
+    map.addLayer({
+      id: 'route-line-fg', type: 'line', source: 'route-line',
+      layout: {'line-join':'round', 'line-cap':'round'},
+      paint: {'line-color':'#2563eb', 'line-width':4, 'line-opacity':0.85}
+    });
+
+    // Auto-start GPS
+    geolocateCtrl.trigger();
+  });
 }
 
-// ── GPS ──
-function startTracking() {
-  if (!navigator.geolocation) return;
-  watchId = navigator.geolocation.watchPosition(
-    pos => {
-      userLat = pos.coords.latitude;
-      userLng = pos.coords.longitude;
-      updateUserMarker(pos.coords.accuracy);
-      checkProximity();
-      renderNearbyList();
-    },
-    err => console.warn('GPS:', err.message),
-    {enableHighAccuracy: true, timeout: 15000, maximumAge: 5000}
-  );
-}
-
-function updateUserMarker(accuracy) {
-  if (userMarker) {
-    userMarker.setLatLng([userLat, userLng]);
-    accuracyCircle.setLatLng([userLat, userLng]).setRadius(accuracy);
-    alertCircle.setLatLng([userLat, userLng]).setRadius(ALERT_RADIUS);
-  } else {
-    alertCircle = L.circle([userLat, userLng], {
-      radius: ALERT_RADIUS, fillColor:'#ef4444', fillOpacity:.06, color:'#ef4444', weight:1, dashArray:'6,4'
-    }).addTo(map);
-    accuracyCircle = L.circle([userLat, userLng], {
-      radius: accuracy, fillColor:'#4285f4', fillOpacity:.08, color:'#4285f4', weight:1
-    }).addTo(map);
-    userMarker = L.circleMarker([userLat, userLng], {
-      radius: 8, fillColor:'#4285f4', fillOpacity:1, color:'#fff', weight:3
-    }).addTo(map);
+// ── Alert radius circle geometry ──
+function makeCirclePoly(center, radiusM, steps) {
+  steps = steps || 64;
+  const coords = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = (i / steps) * 2 * Math.PI;
+    const lat = center[1] + (radiusM / 111320) * Math.sin(angle);
+    const lng = center[0] + (radiusM / (111320 * Math.cos(center[1] * Math.PI / 180))) * Math.cos(angle);
+    coords.push([lng, lat]);
   }
+  return {type:'Feature', geometry:{type:'Polygon', coordinates:[coords]}};
 }
 
+function updateAlertCircle() {
+  if (!mapReady || userLat == null) return;
+  const src = map.getSource('alert-radius');
+  if (src) src.setData(makeCirclePoly([userLng, userLat], ALERT_RADIUS));
+}
+
+// ── GPS helpers ──
 function centerOnMe() {
-  if (userLat != null) map.setView([userLat, userLng], 16);
-  else if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      pos => { userLat = pos.coords.latitude; userLng = pos.coords.longitude; map.setView([userLat, userLng], 16); updateUserMarker(pos.coords.accuracy); },
-      () => alert('Could not get location. Make sure location services are enabled.')
-    );
-  }
+  if (userLat != null) map.flyTo({center:[userLng, userLat], zoom:16});
+  else geolocateCtrl.trigger();
 }
 
 // ── Proximity alerts ──
@@ -398,10 +426,9 @@ function checkProximity() {
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371e3;
-  const toRad = x => x * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  const R = 6371e3, toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
@@ -409,18 +436,15 @@ function showToast(acc, dist) {
   const t = document.getElementById('toast');
   document.getElementById('toast-dot').style.background = STATUS_COLORS[acc.status];
   document.getElementById('toast-name').textContent = acc.name;
-  const distText = dist < 1000 ? Math.round(dist) + 'm' : (dist/1609.34).toFixed(1) + ' mi';
-  document.getElementById('toast-detail').textContent = distText + ' away • ' + STATUS_LABELS[acc.status];
+  const dt = dist < 1000 ? Math.round(dist)+'m' : (dist/1609.34).toFixed(1)+' mi';
+  document.getElementById('toast-detail').textContent = dt+' away • '+STATUS_LABELS[acc.status];
   t.style.display = 'flex';
-  if (Notification.permission === 'granted') {
-    new Notification(acc.name + ' is nearby!', {body: distText + ' • ' + STATUS_LABELS[acc.status]});
-  }
+  if (Notification.permission === 'granted') new Notification(acc.name+' is nearby!', {body:dt+' • '+STATUS_LABELS[acc.status]});
   clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.style.display = 'none', 8000);
+  t._timer = setTimeout(() => t.style.display='none', 8000);
 }
 
-function dismissToast() { document.getElementById('toast').style.display = 'none'; }
-
+function dismissToast() { document.getElementById('toast').style.display='none'; }
 function toggleAlerts() {
   alertsEnabled = !alertsEnabled;
   document.getElementById('alert-toggle').style.opacity = alertsEnabled ? 1 : .4;
@@ -428,44 +452,48 @@ function toggleAlerts() {
 
 // ── Data loading ──
 async function loadSheet() {
+  saveToken();
   const url = document.getElementById('sheet-url').value.trim();
   if (!url) return;
   showLoadError('');
   document.querySelector('#setup-modal .btn-primary').textContent = 'Loading...';
   try {
-    const resp = await fetch('/api/fetch-sheet?url=' + encodeURIComponent(url));
+    const resp = await fetch('/api/fetch-sheet?url='+encodeURIComponent(url));
     const data = await resp.json();
     if (data.error) { showLoadError(data.error); return; }
+    localStorage.setItem('rr_sheet_url', url);
     parseCSVData(data.csv);
-  } catch (e) {
-    showLoadError('Network error: ' + e.message);
-  } finally {
-    document.querySelector('#setup-modal .btn-primary').textContent = 'Load';
-  }
+  } catch(e) { showLoadError('Network error: '+e.message); }
+  finally { document.querySelector('#setup-modal .btn-primary').textContent = 'Load'; }
 }
 
 function handleFileUpload(e) {
+  saveToken();
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
     try {
-      const data = new Uint8Array(ev.target.result);
-      const wb = XLSX.read(data, {type: 'array'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const csv = XLSX.utils.sheet_to_csv(ws);
-      parseCSVData(csv);
-    } catch (err) {
-      showLoadError('Could not read file: ' + err.message);
-    }
+      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+      parseCSVData(XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]));
+    } catch(err) { showLoadError('Could not read file: '+err.message); }
   };
   reader.readAsArrayBuffer(file);
 }
 
+function saveToken() {
+  const tok = document.getElementById('mapbox-token').value.trim();
+  if (tok && tok !== localStorage.getItem('rr_mapbox_token')) {
+    localStorage.setItem('rr_mapbox_token', tok);
+    mapboxgl.accessToken = tok;
+    map.remove();
+    initMap();
+  }
+}
+
 function parseCSVData(csv) {
-  const wb = XLSX.read(csv, {type: 'string'});
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json(ws, {header: 1, defval: ''});
+  const wb = XLSX.read(csv, {type:'string'});
+  const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
   if (json.length < 2) { showLoadError('Sheet appears empty.'); return; }
   rawHeaders = json[0].map(String);
   rawData = json.slice(1).filter(r => r.some(c => String(c).trim()));
@@ -474,469 +502,327 @@ function parseCSVData(csv) {
 
 function showLoadError(msg) {
   const el = document.getElementById('load-error');
-  el.textContent = msg;
-  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg; el.style.display = msg ? 'block' : 'none';
 }
 
 // ── Column mapping ──
 function showColumnMapping() {
-  const container = document.getElementById('col-mapping');
-  container.style.display = 'block';
+  document.getElementById('col-mapping').style.display = 'block';
+  let t = '<table class="preview-table"><tr>'+rawHeaders.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr>';
+  for (let i=0; i<Math.min(3,rawData.length); i++) t += '<tr>'+rawData[i].map(c=>'<td>'+esc(String(c))+'</td>').join('')+'</tr>';
+  document.getElementById('preview-container').innerHTML = t+'</table>';
 
-  // Preview table
-  let tableHTML = '<table class="preview-table"><tr>' + rawHeaders.map(h => '<th>' + esc(h) + '</th>').join('') + '</tr>';
-  for (let i = 0; i < Math.min(3, rawData.length); i++) {
-    tableHTML += '<tr>' + rawData[i].map(c => '<td>' + esc(String(c)) + '</td>').join('') + '</tr>';
-  }
-  tableHTML += '</table>';
-  document.getElementById('preview-container').innerHTML = tableHTML;
-
-  // Populate selects
-  const selects = ['col-name','col-address','col-city','col-state','col-zip','col-phone','col-lastorder','col-notes'];
-  selects.forEach(id => {
+  const ids = ['col-name','col-address','col-city','col-state','col-zip','col-phone','col-lastorder','col-notes'];
+  ids.forEach(id => {
     const sel = document.getElementById(id);
     sel.innerHTML = '<option value="-1">— none —</option>';
-    rawHeaders.forEach((h, i) => {
-      sel.innerHTML += '<option value="' + i + '">' + esc(h) + '</option>';
-    });
+    rawHeaders.forEach((h,i) => sel.innerHTML += '<option value="'+i+'">'+esc(h)+'</option>');
   });
 
-  // Auto-detect
-  const patterns = {
-    'col-name': /^(name|account|company|customer|business|restaurant|bar|shop|store|client|buyer)/i,
-    'col-address': /^(address|street|location|addr|add)/i,
-    'col-city': /^(city|town|municipality)/i,
-    'col-state': /^(state|province|st$)/i,
-    'col-zip': /^(zip|postal|post.?code|zipcode)/i,
-    'col-phone': /^(phone|tel|mobile|cell)/i,
-    'col-lastorder': /^(last.?order|last.?purchase|last.?buy|last.?date|order.?date|date)/i,
-    'col-notes': /^(note|comment|memo|priority|type|category)/i
+  const pats = {
+    'col-name':/^(name|account|company|customer|business|restaurant|bar|shop|store|client|buyer)/i,
+    'col-address':/^(address|street|location|addr|add)/i,
+    'col-city':/^(city|town|municipality)/i, 'col-state':/^(state|province|st$)/i,
+    'col-zip':/^(zip|postal|post.?code|zipcode)/i, 'col-phone':/^(phone|tel|mobile|cell)/i,
+    'col-lastorder':/^(last.?order|last.?purchase|last.?buy|last.?date|order.?date|date)/i,
+    'col-notes':/^(note|comment|memo|priority|type|category)/i
   };
-  for (const [id, pat] of Object.entries(patterns)) {
+  for (const [id,pat] of Object.entries(pats)) {
     const idx = rawHeaders.findIndex(h => pat.test(h.trim()));
     if (idx >= 0) document.getElementById(id).value = idx;
   }
 }
 
 async function confirmMapping() {
-  const getCol = id => parseInt(document.getElementById(id).value);
-  const nameCol = getCol('col-name');
-  const addrCol = getCol('col-address');
-  const cityCol = getCol('col-city');
-  const stateCol = getCol('col-state');
-  const zipCol = getCol('col-zip');
-  const phoneCol = getCol('col-phone');
-  const orderCol = getCol('col-lastorder');
-  const notesCol = getCol('col-notes');
+  const g = id => parseInt(document.getElementById(id).value);
+  const nameCol=g('col-name'), addrCol=g('col-address'), cityCol=g('col-city'),
+        stateCol=g('col-state'), zipCol=g('col-zip'), phoneCol=g('col-phone'),
+        orderCol=g('col-lastorder'), notesCol=g('col-notes');
+  if (addrCol<0) { showLoadError('Please select at least an Address column.'); return; }
 
-  if (addrCol < 0) { showLoadError('Please select at least an Address column.'); return; }
-
-  // Build accounts
-  accounts = rawData.map((row, i) => {
+  accounts = rawData.map((row,i) => {
     const parts = [row[addrCol]];
-    if (cityCol >= 0 && row[cityCol]) parts.push(row[cityCol]);
-    if (stateCol >= 0 && row[stateCol]) parts.push(row[stateCol]);
-    if (zipCol >= 0 && row[zipCol]) parts.push(row[zipCol]);
-    const address = parts.map(p => String(p).trim()).filter(Boolean).join(', ');
-
+    if (cityCol>=0 && row[cityCol]) parts.push(row[cityCol]);
+    if (stateCol>=0 && row[stateCol]) parts.push(row[stateCol]);
+    if (zipCol>=0 && row[zipCol]) parts.push(row[zipCol]);
+    const address = parts.map(p=>String(p).trim()).filter(Boolean).join(', ');
     let lastOrder = null;
-    if (orderCol >= 0 && row[orderCol]) {
-      const d = new Date(row[orderCol]);
-      if (!isNaN(d)) lastOrder = d;
-    }
-
+    if (orderCol>=0 && row[orderCol]) { const d=new Date(row[orderCol]); if(!isNaN(d)) lastOrder=d; }
     return {
-      id: i,
-      name: nameCol >= 0 ? String(row[nameCol]).trim() : 'Account ' + (i+1),
-      address,
-      phone: phoneCol >= 0 ? String(row[phoneCol]).trim() : '',
-      notes: notesCol >= 0 ? String(row[notesCol]).trim() : '',
-      lastOrder,
-      lat: null, lng: null,
-      status: deriveStatus(lastOrder),
-      _row: row
+      id:i, name: nameCol>=0 ? String(row[nameCol]).trim() : 'Account '+(i+1),
+      address, phone: phoneCol>=0 ? String(row[phoneCol]).trim() : '',
+      notes: notesCol>=0 ? String(row[notesCol]).trim() : '',
+      lastOrder, lat:null, lng:null, status: deriveStatus(lastOrder), _row:row
     };
   }).filter(a => a.address);
 
-  // Geocode all
   const btn = document.getElementById('confirm-btn');
-  btn.disabled = true;
-  btn.textContent = 'Geocoding...';
-  const prog = document.getElementById('geocode-progress');
-  prog.style.display = 'block';
+  btn.disabled = true; btn.textContent = 'Geocoding...';
+  document.getElementById('geocode-progress').style.display = 'block';
 
   let done = 0;
   for (const acc of accounts) {
-    document.getElementById('geo-progress-text').textContent = `Geocoding ${done+1} of ${accounts.length}...`;
-    document.getElementById('geo-progress-fill').style.width = (done / accounts.length * 100) + '%';
+    document.getElementById('geo-progress-text').textContent = 'Geocoding '+(done+1)+' of '+accounts.length+'...';
+    document.getElementById('geo-progress-fill').style.width = (done/accounts.length*100)+'%';
     try {
-      const resp = await fetch('/api/geocode?q=' + encodeURIComponent(acc.address));
+      const resp = await fetch('/api/geocode?q='+encodeURIComponent(acc.address));
       const data = await resp.json();
-      if (data.lat) { acc.lat = data.lat; acc.lng = data.lng; }
-    } catch (e) { /* skip failed */ }
+      if (data.lat) { acc.lat=data.lat; acc.lng=data.lng; }
+    } catch(e) {}
     done++;
   }
 
   document.getElementById('geo-progress-fill').style.width = '100%';
-  document.getElementById('geo-progress-text').textContent = `Done! ${accounts.filter(a=>a.lat).length} of ${accounts.length} geocoded.`;
+  document.getElementById('geo-progress-text').textContent = 'Done! '+accounts.filter(a=>a.lat).length+' of '+accounts.length+' geocoded.';
 
-  // Close modal, show map
   setTimeout(() => {
     document.getElementById('setup-modal').style.display = 'none';
     addMarkersToMap();
     renderAllList();
     renderNearbyList();
     updatePanelStatus();
-    // Request notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    if ('Notification' in window && Notification.permission==='default') Notification.requestPermission();
   }, 600);
 }
 
-function deriveStatus(lastOrder) {
-  if (!lastOrder) return 'prospect';
-  const days = (Date.now() - lastOrder.getTime()) / 86400000;
-  if (days <= 30) return 'active';
-  if (days <= 90) return 'recent';
-  return 'lapsed';
+function deriveStatus(d) {
+  if (!d) return 'prospect';
+  const days = (Date.now()-d.getTime())/86400000;
+  if (days<=30) return 'active'; if (days<=90) return 'recent'; return 'lapsed';
 }
 
 // ── Map markers ──
+function clearMarkers() { mapMarkers.forEach(m=>m.remove()); mapMarkers=[]; }
+
 function addMarkersToMap() {
-  markersLayer.clearLayers();
-  const bounds = [];
+  clearMarkers();
+  const bounds = new mapboxgl.LngLatBounds();
   accounts.forEach(acc => {
     if (!acc.lat) return;
-    bounds.push([acc.lat, acc.lng]);
-    const color = STATUS_COLORS[acc.status];
-    const icon = L.divIcon({
-      className: 'numbered-marker',
-      html: '<div class="marker-circle" style="background:' + color + '">' + (acc.name ? acc.name[0].toUpperCase() : '?') + '</div>',
-      iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15]
-    });
-    const marker = L.marker([acc.lat, acc.lng], {icon}).addTo(markersLayer);
-    marker.bindPopup(createPopup(acc));
-    acc._marker = marker;
+    bounds.extend([acc.lng, acc.lat]);
+    addMarker(acc, acc.name[0].toUpperCase(), STATUS_COLORS[acc.status], 30);
   });
-  if (bounds.length) map.fitBounds(bounds, {padding: [50, 50]});
+  if (!bounds.isEmpty()) map.fitBounds(bounds, {padding:50, maxZoom:15});
+}
+
+function addMarker(acc, label, color, size) {
+  const el = document.createElement('div');
+  el.className = 'marker-circle';
+  el.style.cssText = 'background:'+color+';width:'+size+'px;height:'+size+'px;font-size:'+(size>28?13:11)+'px';
+  el.textContent = label;
+
+  const popup = new mapboxgl.Popup({offset:18, maxWidth:'260px'}).setHTML(createPopup(acc));
+  const marker = new mapboxgl.Marker(el).setLngLat([acc.lng, acc.lat]).setPopup(popup).addTo(map);
+  acc._marker = marker;
+  mapMarkers.push(marker);
 }
 
 function createPopup(acc) {
-  const badge = '<span class="badge badge-' + acc.status + '">' + STATUS_LABELS[acc.status] + '</span>';
+  const badge = '<span class="badge badge-'+acc.status+'">'+STATUS_LABELS[acc.status]+'</span>';
   let orderLine = '';
   if (acc.lastOrder) {
-    const days = Math.round((Date.now() - acc.lastOrder.getTime()) / 86400000);
-    orderLine = '<div style="font-size:12px;color:var(--muted);margin-top:4px">Last order: ' + days + ' days ago</div>';
+    const days = Math.round((Date.now()-acc.lastOrder.getTime())/86400000);
+    orderLine = '<div style="font-size:12px;color:var(--muted);margin-top:4px">Last order: '+days+' days ago</div>';
   }
-  const phoneLine = acc.phone ? '<div style="margin-top:4px"><a href="tel:' + esc(acc.phone) + '" style="color:var(--blue);font-size:12px">' + esc(acc.phone) + '</a></div>' : '';
-  const notesLine = acc.notes ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic">' + esc(acc.notes) + '</div>' : '';
-
-  return '<div><div class="popup-name">' + esc(acc.name) + ' ' + badge + '</div>' +
-    '<div class="popup-addr">' + esc(acc.address) + '</div>' +
-    orderLine + phoneLine + notesLine +
-    '<div class="popup-btns">' +
-    '<button class="popup-btn popup-btn-route" onclick="addToRoute(' + acc.id + ')">Add to Route</button>' +
-    '<button class="popup-btn popup-btn-nav" onclick="navigateTo(' + acc.id + ')">Directions</button>' +
+  const phone = acc.phone ? '<div style="margin-top:4px"><a href="tel:'+esc(acc.phone)+'" style="color:var(--blue);font-size:12px">'+esc(acc.phone)+'</a></div>' : '';
+  const notes = acc.notes ? '<div style="font-size:12px;color:var(--muted);margin-top:4px;font-style:italic">'+esc(acc.notes)+'</div>' : '';
+  return '<div><div class="popup-name">'+esc(acc.name)+' '+badge+'</div>'+
+    '<div class="popup-addr">'+esc(acc.address)+'</div>'+orderLine+phone+notes+
+    '<div class="popup-btns">'+
+    '<button class="popup-btn popup-btn-route" onclick="addToRoute('+acc.id+')">Add to Route</button>'+
+    '<button class="popup-btn popup-btn-nav" onclick="navigateTo('+acc.id+')">Directions</button>'+
     '</div></div>';
 }
 
 // ── Lists ──
 function renderNearbyList() {
   const el = document.getElementById('nearby-list');
-  if (userLat == null || !accounts.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">&#128205;</div><p>Enable location to see nearby accounts.</p></div>';
-    return;
-  }
-  const withDist = accounts.filter(a => a.lat).map(a => ({...a, dist: haversine(userLat, userLng, a.lat, a.lng)}));
-  withDist.sort((a, b) => a.dist - b.dist);
-  const nearby = withDist.filter(a => a.status !== 'active').slice(0, 20);
-
-  if (!nearby.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">&#10004;</div><p>No lapsed or prospect accounts nearby.</p></div>';
-    return;
-  }
-  el.innerHTML = nearby.map(a => accountCard(a, true)).join('');
-  document.getElementById('panel-status').textContent = nearby.filter(a => a.dist < 500).length + ' accounts within 500m need attention';
+  if (userLat==null || !accounts.length) { el.innerHTML='<div class="empty"><div class="icon">&#128205;</div><p>Enable location to see nearby accounts.</p></div>'; return; }
+  const wd = accounts.filter(a=>a.lat).map(a=>({...a, dist:haversine(userLat,userLng,a.lat,a.lng)}));
+  wd.sort((a,b)=>a.dist-b.dist);
+  const nearby = wd.filter(a=>a.status!=='active').slice(0,20);
+  if (!nearby.length) { el.innerHTML='<div class="empty"><div class="icon">&#10004;</div><p>No lapsed or prospect accounts nearby.</p></div>'; return; }
+  el.innerHTML = nearby.map(a=>accountCard(a,true)).join('');
+  document.getElementById('panel-status').textContent = nearby.filter(a=>a.dist<500).length+' accounts within 500m need attention';
 }
 
 function renderAllList() {
   const el = document.getElementById('all-list');
-  const query = document.getElementById('search-input').value.toLowerCase();
-  let filtered = accounts;
-  if (currentFilter !== 'all') filtered = filtered.filter(a => a.status === currentFilter);
-  if (query) filtered = filtered.filter(a => a.name.toLowerCase().includes(query) || a.address.toLowerCase().includes(query));
-
-  if (userLat != null) {
-    filtered = filtered.filter(a => a.lat).map(a => ({...a, dist: haversine(userLat, userLng, a.lat, a.lng)}));
-    filtered.sort((a, b) => a.dist - b.dist);
-  }
-
-  if (!filtered.length) {
-    el.innerHTML = '<div class="empty"><p>No accounts match.</p></div>';
-    return;
-  }
-  el.innerHTML = filtered.map(a => accountCard(a, !!a.dist)).join('');
+  const q = document.getElementById('search-input').value.toLowerCase();
+  let f = accounts;
+  if (currentFilter!=='all') f=f.filter(a=>a.status===currentFilter);
+  if (q) f=f.filter(a=>a.name.toLowerCase().includes(q)||a.address.toLowerCase().includes(q));
+  if (userLat!=null) { f=f.filter(a=>a.lat).map(a=>({...a,dist:haversine(userLat,userLng,a.lat,a.lng)})); f.sort((a,b)=>a.dist-b.dist); }
+  if (!f.length) { el.innerHTML='<div class="empty"><p>No accounts match.</p></div>'; return; }
+  el.innerHTML = f.map(a=>accountCard(a,!!a.dist)).join('');
 }
 
 function accountCard(acc, showDist) {
-  const badge = '<span class="badge badge-' + acc.status + '">' + STATUS_LABELS[acc.status] + '</span>';
-  let distText = '';
-  if (showDist && acc.dist != null) {
-    distText = acc.dist < 1000
-      ? '<span class="distance">' + Math.round(acc.dist) + 'm away</span>'
-      : '<span class="distance">' + (acc.dist / 1609.34).toFixed(1) + ' mi away</span>';
-  }
-  const phoneLine = acc.phone ? ' <a class="phone-link" href="tel:' + esc(acc.phone) + '">' + esc(acc.phone) + '</a>' : '';
-  const inRoute = routeStops.includes(acc.id);
-  return '<div class="account-card" onclick="zoomTo(' + acc.id + ')">' +
-    '<div class="name">' + esc(acc.name) + '</div>' +
-    '<div class="address">' + esc(acc.address) + '</div>' +
-    '<div class="meta">' + badge + distText + phoneLine + '</div>' +
-    '<div class="actions">' +
-    '<button class="card-btn' + (inRoute ? '' : ' primary') + '" onclick="event.stopPropagation();' + (inRoute ? 'removeFromRoute(' + acc.id + ')' : 'addToRoute(' + acc.id + ')') + '">' + (inRoute ? 'In Route' : 'Add to Route') + '</button>' +
-    '<button class="card-btn" onclick="event.stopPropagation();navigateTo(' + acc.id + ')">Directions</button>' +
-    '</div></div>';
+  const badge='<span class="badge badge-'+acc.status+'">'+STATUS_LABELS[acc.status]+'</span>';
+  let dt='';
+  if (showDist&&acc.dist!=null) dt = acc.dist<1000 ? '<span class="distance">'+Math.round(acc.dist)+'m away</span>' : '<span class="distance">'+(acc.dist/1609.34).toFixed(1)+' mi away</span>';
+  const ph = acc.phone ? ' <a class="phone-link" href="tel:'+esc(acc.phone)+'">'+esc(acc.phone)+'</a>' : '';
+  const inR = routeStops.includes(acc.id);
+  return '<div class="account-card" onclick="zoomTo('+acc.id+')">'+
+    '<div class="name">'+esc(acc.name)+'</div><div class="address">'+esc(acc.address)+'</div>'+
+    '<div class="meta">'+badge+dt+ph+'</div>'+
+    '<div class="actions"><button class="card-btn'+(inR?'':' primary')+'" onclick="event.stopPropagation();'+(inR?'removeFromRoute('+acc.id+')':'addToRoute('+acc.id+')')+'">'+(inR?'In Route':'Add to Route')+'</button>'+
+    '<button class="card-btn" onclick="event.stopPropagation();navigateTo('+acc.id+')">Directions</button></div></div>';
 }
 
 function zoomTo(id) {
-  const acc = accounts.find(a => a.id === id);
-  if (acc && acc.lat) {
-    map.setView([acc.lat, acc.lng], 17);
-    acc._marker && acc._marker.openPopup();
-  }
+  const acc = accounts.find(a=>a.id===id);
+  if (acc&&acc.lat) { map.flyTo({center:[acc.lng,acc.lat],zoom:17}); acc._marker&&acc._marker.togglePopup(); }
 }
 
 function setFilter(f) {
-  currentFilter = f;
-  document.querySelectorAll('.filter-chip').forEach(el => el.classList.toggle('active', el.dataset.filter === f));
+  currentFilter=f;
+  document.querySelectorAll('.filter-chip').forEach(el=>el.classList.toggle('active',el.dataset.filter===f));
   renderAllList();
 }
 
 function updatePanelStatus() {
-  const geocoded = accounts.filter(a => a.lat).length;
-  const lapsed = accounts.filter(a => a.status === 'lapsed' || a.status === 'prospect').length;
-  document.getElementById('panel-status').textContent = geocoded + ' accounts loaded • ' + lapsed + ' need attention';
+  const gc=accounts.filter(a=>a.lat).length, lp=accounts.filter(a=>a.status==='lapsed'||a.status==='prospect').length;
+  document.getElementById('panel-status').textContent = gc+' accounts loaded • '+lp+' need attention';
 }
 
 // ── Route planning ──
 function addToRoute(id) {
-  if (!routeStops.includes(id)) {
-    routeStops.push(id);
-    routeOptimized = false;
-    renderRouteTab();
-    renderAllList();
-    renderNearbyList();
-  }
-  map.closePopup();
+  if (!routeStops.includes(id)) { routeStops.push(id); routeOptimized=false; renderRouteTab(); renderAllList(); renderNearbyList(); }
+  map.getCanvas().click(); // close popup
 }
 
 function removeFromRoute(id) {
-  routeStops = routeStops.filter(x => x !== id);
-  routeOptimized = false;
-  renderRouteTab();
-  renderAllList();
-  renderNearbyList();
+  routeStops=routeStops.filter(x=>x!==id); routeOptimized=false; renderRouteTab(); renderAllList(); renderNearbyList();
 }
 
 function renderRouteTab() {
-  const el = document.getElementById('route-stops');
-  const actions = document.getElementById('route-actions');
-  const summary = document.getElementById('route-summary');
-
+  const el=document.getElementById('route-stops'), actions=document.getElementById('route-actions'), summary=document.getElementById('route-summary');
   if (!routeStops.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">&#128663;</div><p>Tap "Add to Route" on any account to build your run.</p></div>';
-    actions.style.display = 'none';
-    summary.style.display = 'none';
-    routeLayer.clearLayers();
+    el.innerHTML='<div class="empty"><div class="icon">&#128663;</div><p>Tap "Add to Route" on any account to build your run.</p></div>';
+    actions.style.display='none'; summary.style.display='none';
+    if (mapReady) map.getSource('route-line').setData({type:'Feature',geometry:{type:'LineString',coordinates:[]}});
     return;
   }
-
-  actions.style.display = 'flex';
-  el.innerHTML = routeStops.map((id, i) => {
-    const acc = accounts.find(a => a.id === id);
-    let legInfo = '';
-    if (routeOptimized && routeLegs[i]) {
-      const mi = (routeLegs[i].distance / 1609.34).toFixed(1);
-      const min = Math.round(routeLegs[i].duration / 60);
-      legInfo = '<span class="detail">' + mi + ' mi • ' + min + ' min drive</span>';
-    }
-    return '<div class="route-stop">' +
-      '<div class="route-num">' + (i+1) + '</div>' +
-      '<div class="route-info"><div class="name">' + esc(acc.name) + '</div>' + legInfo + '</div>' +
-      '<button class="route-remove" onclick="removeFromRoute(' + id + ')">&times;</button></div>';
+  actions.style.display='flex';
+  el.innerHTML = routeStops.map((id,i) => {
+    const acc=accounts.find(a=>a.id===id); let leg='';
+    if (routeOptimized&&routeLegs[i]) { const mi=(routeLegs[i].distance/1609.34).toFixed(1), mn=Math.round(routeLegs[i].duration/60); leg='<span class="detail">'+mi+' mi • '+mn+' min drive</span>'; }
+    return '<div class="route-stop"><div class="route-num">'+(i+1)+'</div><div class="route-info"><div class="name">'+esc(acc.name)+'</div>'+leg+'</div><button class="route-remove" onclick="removeFromRoute('+id+')">&times;</button></div>';
   }).join('');
-
-  if (routeOptimized && routeLegs.length) {
-    const totalDist = routeLegs.reduce((s, l) => s + l.distance, 0);
-    const totalTime = routeLegs.reduce((s, l) => s + l.duration, 0);
-    document.getElementById('r-stops').textContent = routeStops.length;
-    document.getElementById('r-miles').textContent = (totalDist / 1609.34).toFixed(1);
-    document.getElementById('r-time').textContent = Math.round(totalTime / 60);
-    summary.style.display = 'grid';
-  } else {
-    summary.style.display = 'none';
-  }
+  if (routeOptimized&&routeLegs.length) {
+    const td=routeLegs.reduce((s,l)=>s+l.distance,0), tt=routeLegs.reduce((s,l)=>s+l.duration,0);
+    document.getElementById('r-stops').textContent=routeStops.length;
+    document.getElementById('r-miles').textContent=(td/1609.34).toFixed(1);
+    document.getElementById('r-time').textContent=Math.round(tt/60);
+    summary.style.display='grid';
+  } else summary.style.display='none';
 }
 
 async function optimizeRoute() {
-  if (routeStops.length < 2) { alert('Add at least 2 stops.'); return; }
+  if (routeStops.length<2) { alert('Add at least 2 stops.'); return; }
+  const stops = routeStops.map(id=>accounts.find(a=>a.id===id)).filter(a=>a&&a.lat);
+  if (stops.length<2) { alert('Not enough geocoded stops.'); return; }
 
-  const stops = routeStops.map(id => accounts.find(a => a.id === id)).filter(a => a && a.lat);
-  if (stops.length < 2) { alert('Not enough geocoded stops.'); return; }
+  const prog=document.getElementById('route-progress');
+  prog.style.display='block';
+  document.getElementById('route-progress-text').textContent='Optimizing route...';
+  document.getElementById('route-progress-fill').style.width='50%';
 
-  const prog = document.getElementById('route-progress');
-  prog.style.display = 'block';
-  document.getElementById('route-progress-text').textContent = 'Optimizing route...';
-  document.getElementById('route-progress-fill').style.width = '50%';
-
-  const coords = stops.map(s => s.lng + ',' + s.lat).join(';');
+  const coords = stops.map(s=>s.lng+','+s.lat).join(';');
   try {
-    const resp = await fetch('https://router.project-osrm.org/trip/v1/driving/' + coords + '?source=first&roundtrip=false&destination=last&geometries=geojson&overview=full&steps=false');
+    const resp = await fetch('https://router.project-osrm.org/trip/v1/driving/'+coords+'?source=first&roundtrip=false&destination=last&geometries=geojson&overview=full&steps=false');
     const data = await resp.json();
+    if (data.code!=='Ok') { alert('Could not optimize: '+(data.message||data.code)); prog.style.display='none'; return; }
 
-    if (data.code !== 'Ok') { alert('Could not optimize: ' + (data.message || data.code)); prog.style.display = 'none'; return; }
+    const wp=data.waypoints, newOrder=new Array(wp.length);
+    wp.forEach((w,idx)=>{ newOrder[w.waypoint_index]=stops[idx].id; });
+    routeStops=newOrder; routeOptimized=true;
+    routeLegs = data.trips[0].legs.map(l=>({distance:l.distance,duration:l.duration}));
+    routeLegs.push({distance:0,duration:0});
 
-    // Reorder stops by waypoint_index
-    const wp = data.waypoints;
-    const newOrder = new Array(wp.length);
-    wp.forEach((w, inputIdx) => { newOrder[w.waypoint_index] = stops[inputIdx].id; });
-    routeStops = newOrder;
-    routeOptimized = true;
+    // Draw route
+    map.getSource('route-line').setData(data.trips[0].geometry);
 
-    // Store legs
-    routeLegs = data.trips[0].legs.map(l => ({distance: l.distance, duration: l.duration}));
-    // Add empty leg for last stop
-    routeLegs.push({distance: 0, duration: 0});
-
-    // Draw route on map
-    routeLayer.clearLayers();
-    const geojson = data.trips[0].geometry;
-    const latlngs = geojson.coordinates.map(c => [c[1], c[0]]);
-    L.polyline(latlngs, {color: '#2563eb', weight: 4, opacity: .7}).addTo(routeLayer);
-
-    // Update markers with numbers
-    markersLayer.clearLayers();
+    // Rebuild markers with route numbers
+    clearMarkers();
     accounts.forEach(acc => {
       if (!acc.lat) return;
-      const routeIdx = routeStops.indexOf(acc.id);
-      const color = STATUS_COLORS[acc.status];
-      const label = routeIdx >= 0 ? String(routeIdx + 1) : acc.name[0].toUpperCase();
-      const size = routeIdx >= 0 ? 32 : 26;
-      const bg = routeIdx >= 0 ? '#2563eb' : color;
-      const icon = L.divIcon({
-        className: 'numbered-marker',
-        html: '<div class="marker-circle" style="background:' + bg + ';width:' + size + 'px;height:' + size + 'px;font-size:' + (routeIdx >= 0 ? 13 : 11) + 'px">' + label + '</div>',
-        iconSize: [size, size], iconAnchor: [size/2, size/2], popupAnchor: [0, -size/2]
-      });
-      const marker = L.marker([acc.lat, acc.lng], {icon}).addTo(markersLayer);
-      marker.bindPopup(createPopup(acc));
-      acc._marker = marker;
+      const ri = routeStops.indexOf(acc.id);
+      const label = ri>=0 ? String(ri+1) : acc.name[0].toUpperCase();
+      const size = ri>=0 ? 32 : 26;
+      const color = ri>=0 ? '#2563eb' : STATUS_COLORS[acc.status];
+      addMarker(acc, label, color, size);
     });
 
-    // Fit map to route
-    map.fitBounds(latlngs, {padding: [60, 60]});
+    // Fit to route
+    const c = data.trips[0].geometry.coordinates;
+    const b = c.reduce((bn,p) => bn.extend(p), new mapboxgl.LngLatBounds(c[0],c[0]));
+    map.fitBounds(b, {padding:60});
 
     renderRouteTab();
-  } catch (e) {
-    alert('Route optimization error: ' + e.message);
-  } finally {
-    prog.style.display = 'none';
-  }
+  } catch(e) { alert('Route optimization error: '+e.message); }
+  finally { prog.style.display='none'; }
 }
 
 function openGoogleMaps() {
-  const stops = routeStops.map(id => accounts.find(a => a.id === id)).filter(a => a && a.lat);
-  if (!stops.length) return;
-  // Google Maps multi-stop URL
-  const waypoints = stops.map(s => s.lat + ',' + s.lng).join('/');
-  window.open('https://www.google.com/maps/dir/' + waypoints, '_blank');
+  const s=routeStops.map(id=>accounts.find(a=>a.id===id)).filter(a=>a&&a.lat);
+  if (!s.length) return;
+  window.open('https://www.google.com/maps/dir/'+s.map(a=>a.lat+','+a.lng).join('/'), '_blank');
 }
 
 function navigateTo(id) {
-  const acc = accounts.find(a => a.id === id);
-  if (!acc || !acc.lat) return;
-  window.open('https://www.google.com/maps/dir/?api=1&destination=' + acc.lat + ',' + acc.lng, '_blank');
+  const acc=accounts.find(a=>a.id===id);
+  if (acc&&acc.lat) window.open('https://www.google.com/maps/dir/?api=1&destination='+acc.lat+','+acc.lng, '_blank');
 }
 
 function exportRoute() {
-  const stops = routeStops.map((id, i) => {
-    const acc = accounts.find(a => a.id === id);
-    return [i+1, acc.name, acc.address, acc.phone, STATUS_LABELS[acc.status], acc.notes].join(',');
-  });
-  const csv = 'Order,Name,Address,Phone,Status,Notes\n' + stops.join('\n');
-  const blob = new Blob([csv], {type: 'text/csv'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'route_' + new Date().toISOString().slice(0,10) + '.csv';
-  a.click();
+  const rows=routeStops.map((id,i)=>{ const a=accounts.find(x=>x.id===id); return [i+1,a.name,a.address,a.phone,STATUS_LABELS[a.status],a.notes].join(','); });
+  const blob=new Blob(['Order,Name,Address,Phone,Status,Notes\n'+rows.join('\n')], {type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='route_'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
 }
 
 // ── UI helpers ──
-function showSetup() { document.getElementById('setup-modal').style.display = 'flex'; }
+function showSetup() { document.getElementById('setup-modal').style.display='flex'; }
 
 function toggleSettings() {
-  const pop = document.getElementById('settings-popover');
-  if (pop.style.display === 'none') {
-    const slider = document.getElementById('radius-slider');
-    slider.value = ALERT_RADIUS;
-    updateRadiusLabel(ALERT_RADIUS);
-    pop.style.display = 'block';
-    // Position vertically near the gear button
-    const gearBtn = document.querySelector('.fab-group').children[1];
-    pop.style.top = (gearBtn.getBoundingClientRect().top) + 'px';
-  } else {
-    pop.style.display = 'none';
-  }
+  const p=document.getElementById('settings-popover');
+  if (p.style.display==='none') {
+    document.getElementById('radius-slider').value=ALERT_RADIUS; updateRadiusLabel(ALERT_RADIUS);
+    p.style.display='block';
+    p.style.top=(document.querySelector('.fab-group').children[1].getBoundingClientRect().top)+'px';
+  } else p.style.display='none';
 }
 
-function dismissSettings() { document.getElementById('settings-popover').style.display = 'none'; }
+function dismissSettings() { document.getElementById('settings-popover').style.display='none'; }
 
 function updateRadius(val) {
-  ALERT_RADIUS = parseInt(val);
-  localStorage.setItem('rr_alert_radius', ALERT_RADIUS);
-  updateRadiusLabel(ALERT_RADIUS);
-  if (alertCircle) alertCircle.setRadius(ALERT_RADIUS);
+  ALERT_RADIUS=parseInt(val); localStorage.setItem('rr_alert_radius',ALERT_RADIUS);
+  updateRadiusLabel(ALERT_RADIUS); updateAlertCircle();
 }
 
 function updateRadiusLabel(m) {
-  const blocks = (m / 125).toFixed(1).replace(/\.0$/, '');
-  document.getElementById('radius-val').textContent = blocks + ' blocks (~' + m + 'm)';
+  const b=(m/125).toFixed(1).replace(/\.0$/,'');
+  document.getElementById('radius-val').textContent=b+' blocks (~'+m+'m)';
 }
 
-function togglePanel() {
-  document.getElementById('panel').classList.toggle('expanded');
-}
+function togglePanel() { document.getElementById('panel').classList.toggle('expanded'); }
 
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.toggle('active', tc.id === 'tab-' + name));
-  if (name === 'nearby') renderNearbyList();
-  if (name === 'all') renderAllList();
-  if (name === 'route') renderRouteTab();
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.toggle('active',tc.id==='tab-'+name));
+  if (name==='nearby') renderNearbyList(); if (name==='all') renderAllList(); if (name==='route') renderRouteTab();
 }
 
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
+function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 // ── Init ──
-initMap();
-startTracking();
-
-// Check for saved sheet URL
+const savedTok = localStorage.getItem('rr_mapbox_token') || '';
+if (savedTok) document.getElementById('mapbox-token').value = savedTok;
 const savedUrl = localStorage.getItem('rr_sheet_url');
 if (savedUrl) document.getElementById('sheet-url').value = savedUrl;
 
-// Save sheet URL when loading
-const origLoadSheet = loadSheet;
-loadSheet = async function() {
-  const url = document.getElementById('sheet-url').value.trim();
-  if (url) localStorage.setItem('rr_sheet_url', url);
-  return origLoadSheet();
-};
+initMap();
 </script>
 </body>
 </html>
