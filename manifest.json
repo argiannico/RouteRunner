@@ -1,0 +1,10 @@
+{
+  "name": "RouteRunner",
+  "short_name": "RouteRunner",
+  "description": "Field sales companion - proximity alerts & route optimization",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
+  "icons": []
+}
