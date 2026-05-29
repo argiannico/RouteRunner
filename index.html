@@ -547,7 +547,11 @@ async function confirmMapping() {
     if (zipCol>=0 && row[zipCol]) parts.push(row[zipCol]);
     const address = parts.map(p=>String(p).trim()).filter(Boolean).join(', ');
     let lastOrder = null;
-    if (orderCol>=0 && row[orderCol]) { const d=new Date(row[orderCol]); if(!isNaN(d)) lastOrder=d; }
+    if (orderCol>=0 && row[orderCol]) {
+      const v = row[orderCol];
+      const d = typeof v === 'number' ? new Date((v - 25569) * 86400000) : new Date(v);
+      if (!isNaN(d) && d.getFullYear() > 2000) lastOrder = d;
+    }
     return {
       id:i, name: nameCol>=0 ? String(row[nameCol]).trim() : 'Account '+(i+1),
       address, phone: phoneCol>=0 ? String(row[phoneCol]).trim() : '',
@@ -823,6 +827,32 @@ const savedUrl = localStorage.getItem('rr_sheet_url');
 if (savedUrl) document.getElementById('sheet-url').value = savedUrl;
 
 initMap();
+
+// Auto-load sample data if no accounts loaded yet
+async function loadSampleData() {
+  try {
+    const resp = await fetch('/api/sample-data');
+    const csv = await resp.text();
+    parseCSVData(csv);
+    // Auto-detect columns and confirm immediately
+    const ids = ['col-name','col-address','col-city','col-state','col-zip','col-phone','col-lastorder','col-notes'];
+    const pats = {
+      'col-name':/^(name|account)/i, 'col-address':/^(address|street)/i,
+      'col-city':/^city/i, 'col-state':/^state/i, 'col-zip':/^zip/i,
+      'col-phone':/^(phone|tel)/i, 'col-lastorder':/^(last|order|date)/i, 'col-notes':/^note/i
+    };
+    for (const [id,pat] of Object.entries(pats)) {
+      const idx = rawHeaders.findIndex(h => pat.test(h.trim()));
+      if (idx >= 0) document.getElementById(id).value = idx;
+    }
+    await confirmMapping();
+  } catch(e) { console.log('No sample data:', e); }
+}
+
+// Auto-load sample data on startup if token is set
+if (savedTok) {
+  map.on('load', () => loadSampleData());
+}
 </script>
 </body>
 </html>

@@ -59,6 +59,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.serve_file('index.html', 'text/html')
         elif self.path == '/manifest.json':
             self.serve_file('manifest.json', 'application/json')
+        elif self.path == '/api/sample-data':
+            self.serve_file('sample_data.csv', 'text/csv')
         elif self.path.startswith('/api/fetch-sheet'):
             self.handle_fetch_sheet()
         elif self.path.startswith('/api/geocode'):
@@ -73,6 +75,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = f.read()
             self.send_response(200)
             self.send_header('Content-Type', f'{content_type}; charset=utf-8')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
             self.end_headers()
             self.wfile.write(data)
         except FileNotFoundError:
