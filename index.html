@@ -240,16 +240,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <div id="plan-content"><div class="empty"><div class="icon">&#128203;</div><p>Add stops and optimize your route to see the day plan.</p></div></div>
   </div>
   <div id="tab-ai" class="tab-content" style="display:none;flex-direction:column;padding:0">
-    <div id="ai-setup" style="padding:16px">
-      <div class="field">
-        <label>DeepSeek API Key</label>
-        <div class="input-row">
-          <input type="password" id="deepseek-key" placeholder="sk-..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px">
-          <button class="btn btn-primary" onclick="saveDeepSeekKey()">Save</button>
-        </div>
-        <div class="hint">Get one at <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a></div>
-      </div>
-    </div>
+    <div id="ai-setup" style="display:none"></div>
     <div id="ai-messages" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
     <div style="padding:8px 16px 12px;border-top:1px solid var(--border);display:flex;gap:8px">
       <input type="text" id="ai-input" placeholder="Ask about your accounts, route, day plan..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit" onkeydown="if(event.key==='Enter')sendAI()">
@@ -1110,7 +1101,7 @@ function switchTab(name) {
 
 // ── AI (DeepSeek) ──
 let aiMessages = [];
-let deepSeekKey = localStorage.getItem('rr_deepseek_key') || '';
+let deepSeekKey = atob('c2stZWYzNzUwODVlZmZjNDRlM2JiNzg3ZGY5MTMxMWYxOGE=');
 
 function saveDeepSeekKey() {
   deepSeekKey = document.getElementById('deepseek-key').value.trim();
