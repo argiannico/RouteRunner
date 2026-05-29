@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1e40af">
 <title>RouteRunner</title>
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.4.0/mapbox-gl.css" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -450,6 +450,38 @@ function toggleAlerts() {
   document.getElementById('alert-toggle').style.opacity = alertsEnabled ? 1 : .4;
 }
 
+// ── Geocoding (backend proxy or direct Nominatim) ──
+const geoCache = {};
+let lastGeoTime = 0;
+
+async function geocodeAddress(address) {
+  const key = address.trim().toLowerCase();
+  if (geoCache[key]) return geoCache[key];
+
+  // Try backend proxy first (works when running route_runner.py)
+  try {
+    const resp = await fetch('/api/geocode?q='+encodeURIComponent(address));
+    if (resp.ok) { const data = await resp.json(); if (data.lat) { geoCache[key]=data; return data; } }
+  } catch(e) {}
+
+  // Fallback: direct Nominatim (works on GitHub Pages)
+  const wait = 1100 - (Date.now() - lastGeoTime);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastGeoTime = Date.now();
+  try {
+    const resp = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(address), {
+      headers: {'User-Agent': 'RouteRunner/1.0 (field-sales-tool)'}
+    });
+    const results = await resp.json();
+    if (results.length) {
+      const data = {lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon)};
+      geoCache[key] = data;
+      return data;
+    }
+  } catch(e) {}
+  return null;
+}
+
 // ── Data loading ──
 async function loadSheet() {
   saveToken();
@@ -569,9 +601,8 @@ async function confirmMapping() {
     document.getElementById('geo-progress-text').textContent = 'Geocoding '+(done+1)+' of '+accounts.length+'...';
     document.getElementById('geo-progress-fill').style.width = (done/accounts.length*100)+'%';
     try {
-      const resp = await fetch('/api/geocode?q='+encodeURIComponent(acc.address));
-      const data = await resp.json();
-      if (data.lat) { acc.lat=data.lat; acc.lng=data.lng; }
+      const data = await geocodeAddress(acc.address);
+      if (data && data.lat) { acc.lat=data.lat; acc.lng=data.lng; }
     } catch(e) {}
     done++;
   }
@@ -831,7 +862,7 @@ initMap();
 // Auto-load sample data if no accounts loaded yet
 async function loadSampleData() {
   try {
-    const resp = await fetch('/api/sample-data');
+    const resp = await fetch('sample_data.csv');
     const csv = await resp.text();
     parseCSVData(csv);
     // Auto-detect columns and confirm immediately
