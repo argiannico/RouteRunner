@@ -189,15 +189,19 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <div id="route-summary" class="route-summary" style="display:none">
       <div><div class="val" id="r-stops">0</div><div class="label">Stops</div></div>
       <div><div class="val" id="r-miles">0</div><div class="label">Miles</div></div>
-      <div><div class="val" id="r-time">0</div><div class="label">Min</div></div>
+      <div><div class="val" id="r-time">0</div><div class="label">Walk Min</div></div>
     </div>
     <div id="route-progress" style="display:none">
       <div class="progress-bar"><div class="progress-fill" id="route-progress-fill"></div></div>
       <div class="progress-text" id="route-progress-text">Geocoding...</div>
     </div>
     <div class="route-actions" id="route-actions" style="display:none">
-      <button class="btn btn-primary btn-full" onclick="optimizeRoute()">Optimize Route</button>
-      <button class="btn btn-secondary btn-full" onclick="openGoogleMaps()">Open in Google Maps</button>
+      <div class="field" style="margin-bottom:8px">
+        <label style="font-size:12px;font-weight:600;color:var(--gray);margin-bottom:4px;display:block">Departure Time</label>
+        <input type="datetime-local" id="depart-time" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">
+      </div>
+      <button class="btn btn-primary btn-full" onclick="optimizeRoute()">Optimize Route (Walking)</button>
+      <button class="btn btn-secondary btn-full" onclick="openGoogleMaps()">Open in Google Maps (Transit)</button>
       <button class="btn btn-secondary btn-full" onclick="exportRoute()">Export CSV</button>
     </div>
   </div>
@@ -766,7 +770,7 @@ async function optimizeRoute() {
 
   const coords = stops.map(s=>s.lng+','+s.lat).join(';');
   try {
-    const resp = await fetch('https://router.project-osrm.org/trip/v1/driving/'+coords+'?source=first&roundtrip=false&destination=last&geometries=geojson&overview=full&steps=false');
+    const resp = await fetch('https://router.project-osrm.org/trip/v1/foot/'+coords+'?source=first&roundtrip=false&destination=last&geometries=geojson&overview=full&steps=false');
     const data = await resp.json();
     if (data.code!=='Ok') { alert('Could not optimize: '+(data.message||data.code)); prog.style.display='none'; return; }
 
@@ -803,12 +807,18 @@ async function optimizeRoute() {
 function openGoogleMaps() {
   const s=routeStops.map(id=>accounts.find(a=>a.id===id)).filter(a=>a&&a.lat);
   if (!s.length) return;
-  window.open('https://www.google.com/maps/dir/'+s.map(a=>a.lat+','+a.lng).join('/'), '_blank');
+  let url = 'https://www.google.com/maps/dir/'+s.map(a=>a.lat+','+a.lng).join('/')+'/@'+s[0].lat+','+s[0].lng+',14z/data=!4m2!4m1!3e3';
+  const timeInput = document.getElementById('depart-time').value;
+  if (timeInput) {
+    const epoch = Math.floor(new Date(timeInput).getTime() / 1000);
+    url += '!4m5!4m4!2m3!6e0!7e2!8j'+epoch;
+  }
+  window.open(url, '_blank');
 }
 
 function navigateTo(id) {
   const acc=accounts.find(a=>a.id===id);
-  if (acc&&acc.lat) window.open('https://www.google.com/maps/dir/?api=1&destination='+acc.lat+','+acc.lng, '_blank');
+  if (acc&&acc.lat) window.open('https://www.google.com/maps/dir/?api=1&destination='+acc.lat+','+acc.lng+'&travelmode=transit', '_blank');
 }
 
 function exportRoute() {
@@ -879,6 +889,11 @@ async function loadSampleData() {
     await confirmMapping();
   } catch(e) { console.log('No sample data:', e); }
 }
+
+// Default departure time to now
+const now = new Date();
+now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+document.getElementById('depart-time').value = now.toISOString().slice(0,16);
 
 // Auto-load sample data on startup if token is set
 if (savedTok) {
