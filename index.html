@@ -929,14 +929,59 @@ async function optimizeRoute() {
   finally { prog.style.display='none'; }
 }
 
-function openGoogleMapsHop(fromIdx, toIdx) {
-  const from = accounts.find(a=>a.id===routeStops[fromIdx]);
-  const to = accounts.find(a=>a.id===routeStops[toIdx]);
-  if (!from||!to||!from.lat||!to.lat) return;
-  let url = 'https://www.google.com/maps/dir/?api=1&origin='+from.lat+','+from.lng+'&destination='+to.lat+','+to.lng+'&travelmode=transit';
-  const timeInput = document.getElementById('depart-time').value;
-  if (timeInput) url += '&departure_time='+Math.floor(new Date(timeInput).getTime()/1000);
-  window.open(url, '_blank');
+function findNearestStations(lat, lng, count) {
+  if (!subwayStations.length) return [];
+  return subwayStations.map(s => {
+    const [sLng, sLat] = s.geometry.coordinates;
+    return {name: s.properties._name, lines: s.properties._lines, dist: haversine(lat, lng, sLat, sLng), lat: sLat, lng: sLng};
+  }).sort((a,b) => a.dist - b.dist).slice(0, count);
+}
+
+function getTransitDirection(fromAcc, toAcc) {
+  const dist = haversine(fromAcc.lat, fromAcc.lng, toAcc.lat, toAcc.lng);
+  if (dist < 400) return {type:'walk', dist, text:'Walk ('+Math.round(dist)+'m)'};
+
+  const fromStations = findNearestStations(fromAcc.lat, fromAcc.lng, 5);
+  const toStations = findNearestStations(toAcc.lat, toAcc.lng, 5);
+  if (!fromStations.length || !toStations.length) return {type:'walk', dist, text:'Walk ('+Math.round(dist)+'m)'};
+
+  const parseLine = s => s.replace(/[^A-Z0-9]/gi,' ').toUpperCase().split(/\s+/).filter(Boolean);
+
+  let best = null;
+  for (const fs of fromStations) {
+    const fLines = parseLine(fs.lines);
+    for (const ts of toStations) {
+      const tLines = parseLine(ts.lines);
+      const shared = fLines.filter(l => tLines.includes(l));
+      if (shared.length) {
+        const totalWalk = fs.dist + ts.dist;
+        if (!best || totalWalk < best.totalWalk) {
+          best = {fromStation:fs, toStation:ts, lines:shared, totalWalk};
+        }
+      }
+    }
+  }
+
+  if (best) {
+    const walkTo = Math.round(best.fromStation.dist);
+    const walkFrom = Math.round(best.toStation.dist);
+    return {
+      type:'subway', dist,
+      fromStation: best.fromStation, toStation: best.toStation,
+      lines: best.lines, walkTo, walkFrom,
+      text: 'Walk '+walkTo+'m → '+best.fromStation.name+' → '+best.lines.join('/')+' → '+best.toStation.name+' → Walk '+walkFrom+'m'
+    };
+  }
+
+  // No direct line — suggest nearest stations with a transfer
+  const fs = fromStations[0], ts = toStations[0];
+  return {
+    type:'transfer', dist,
+    fromStation: fs, toStation: ts,
+    fromLines: parseLine(fs.lines), toLines: parseLine(ts.lines),
+    walkTo: Math.round(fs.dist), walkFrom: Math.round(ts.dist),
+    text: 'Walk '+Math.round(fs.dist)+'m → '+fs.name+' ('+parseLine(fs.lines).join('/')+') → transfer → '+ts.name+' ('+parseLine(ts.lines).join('/')+') → Walk '+Math.round(ts.dist)+'m'
+  };
 }
 
 function renderLegButtons() {
@@ -944,28 +989,41 @@ function renderLegButtons() {
   const n = routeStops.length;
   if (n < 2) { el.innerHTML = ''; return; }
 
-  let html = '<div style="font-size:12px;font-weight:600;color:var(--gray);margin:8px 0 6px">Navigate by Leg (Transit)</div>';
+  let html = '<div style="font-size:12px;font-weight:600;color:var(--gray);margin:12px 0 8px">Directions</div>';
   for (let i = 0; i < n - 1; i++) {
     const from = accounts.find(a=>a.id===routeStops[i]);
     const to = accounts.find(a=>a.id===routeStops[i+1]);
-    html += '<button class="btn btn-secondary btn-full" style="margin-bottom:4px;font-size:12px;text-align:left;justify-content:flex-start" onclick="openGoogleMapsHop('+i+','+(i+1)+')">';
-    html += '<span style="background:var(--blue);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:6px;flex-shrink:0">'+(i+1)+'</span>';
-    html += esc(from.name)+' → '+esc(to.name);
-    html += '</button>';
-  }
-  html += '<button class="btn btn-secondary btn-full" style="margin-top:4px;font-size:12px" onclick="openAllHops()">Open All Legs</button>';
-  el.innerHTML = html;
-}
+    if (!from||!to||!from.lat||!to.lat) continue;
+    const dir = getTransitDirection(from, to);
 
-function openAllHops() {
-  for (let i = 0; i < routeStops.length - 1; i++) {
-    setTimeout(() => openGoogleMapsHop(i, i+1), i * 300);
+    html += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">';
+    html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px">';
+    html += '<span style="background:var(--blue);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:4px">'+(i+1)+'</span>';
+    html += esc(from.name)+' → '+esc(to.name)+'</div>';
+
+    if (dir.type === 'walk') {
+      html += '<div style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">&#128694; '+dir.text+'</div>';
+    } else if (dir.type === 'subway') {
+      html += '<div style="font-size:12px;line-height:1.8">';
+      html += '&#128694; Walk '+dir.walkTo+'m to <b>'+esc(dir.fromStation.name)+'</b><br>';
+      html += '&#128647; Take '+formatSubwayBadges(dir.lines.join(' '))+' to <b>'+esc(dir.toStation.name)+'</b><br>';
+      html += '&#128694; Walk '+dir.walkFrom+'m to destination';
+      html += '</div>';
+    } else {
+      html += '<div style="font-size:12px;line-height:1.8">';
+      html += '&#128694; Walk '+dir.walkTo+'m to <b>'+esc(dir.fromStation.name)+'</b> '+formatSubwayBadges(dir.fromLines.join(' '))+'<br>';
+      html += '&#128260; Transfer to '+formatSubwayBadges(dir.toLines.join(' '))+' at <b>'+esc(dir.toStation.name)+'</b><br>';
+      html += '&#128694; Walk '+dir.walkFrom+'m to destination';
+      html += '</div>';
+    }
+    html += '</div>';
   }
+  el.innerHTML = html;
 }
 
 function navigateTo(id) {
   const acc=accounts.find(a=>a.id===id);
-  if (acc&&acc.lat) window.open('https://www.google.com/maps/dir/?api=1&destination='+acc.lat+','+acc.lng+'&travelmode=transit', '_blank');
+  if (acc&&acc.lat) { addToRoute(id); switchTab('route'); }
 }
 
 function exportRoute() {
