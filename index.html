@@ -215,7 +215,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
         <input type="datetime-local" id="depart-time" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit">
       </div>
       <button class="btn btn-primary btn-full" onclick="optimizeRoute()">Optimize Route (Walking)</button>
-      <button class="btn btn-secondary btn-full" onclick="openGoogleMaps()">Open in Google Maps (Transit)</button>
+      <div id="leg-buttons"></div>
       <button class="btn btn-secondary btn-full" onclick="exportRoute()">Export CSV</button>
     </div>
   </div>
@@ -876,6 +876,7 @@ function renderRouteTab() {
     document.getElementById('r-time').textContent=Math.round(tt/60);
     summary.style.display='grid';
   } else summary.style.display='none';
+  renderLegButtons();
 }
 
 async function optimizeRoute() {
@@ -924,16 +925,46 @@ async function optimizeRoute() {
   finally { prog.style.display='none'; }
 }
 
-function openGoogleMaps() {
-  const s=routeStops.map(id=>accounts.find(a=>a.id===id)).filter(a=>a&&a.lat);
-  if (!s.length) return;
-  let url = 'https://www.google.com/maps/dir/'+s.map(a=>a.lat+','+a.lng).join('/')+'/@'+s[0].lat+','+s[0].lng+',14z/data=!4m2!4m1!3e3';
+function openGoogleMapsLeg(startIdx, endIdx) {
+  const stops = routeStops.slice(startIdx, endIdx + 1).map(id=>accounts.find(a=>a.id===id)).filter(a=>a&&a.lat);
+  if (!stops.length) return;
+  let url = 'https://www.google.com/maps/dir/'+stops.map(a=>a.lat+','+a.lng).join('/')+'/@'+stops[0].lat+','+stops[0].lng+',14z/data=!4m2!4m1!3e3';
   const timeInput = document.getElementById('depart-time').value;
   if (timeInput) {
     const epoch = Math.floor(new Date(timeInput).getTime() / 1000);
     url += '!4m5!4m4!2m3!6e0!7e2!8j'+epoch;
   }
   window.open(url, '_blank');
+}
+
+function renderLegButtons() {
+  const el = document.getElementById('leg-buttons');
+  const n = routeStops.length;
+  if (n < 2) { el.innerHTML = ''; return; }
+
+  const getNames = (start, end) => {
+    const first = accounts.find(a=>a.id===routeStops[start]);
+    const last = accounts.find(a=>a.id===routeStops[end]);
+    return esc(first.name) + ' → ' + esc(last.name);
+  };
+
+  let html = '';
+  if (n <= 3) {
+    html += '<button class="btn btn-secondary btn-full" onclick="openGoogleMapsLeg(0,'+(n-1)+')">Open in Google Maps (Transit)</button>';
+  } else if (n <= 5) {
+    const mid = Math.ceil(n / 2);
+    html += '<div style="font-size:12px;font-weight:600;color:var(--gray);margin:8px 0 4px">Open in Google Maps (Transit)</div>';
+    html += '<button class="btn btn-secondary btn-full" style="margin-bottom:4px;font-size:12px" onclick="openGoogleMapsLeg(0,'+(mid-1)+')">Leg 1: '+getNames(0,mid-1)+' ('+mid+' stops)</button>';
+    html += '<button class="btn btn-secondary btn-full" style="font-size:12px" onclick="openGoogleMapsLeg('+(mid-1)+','+(n-1)+')">Leg 2: '+getNames(mid-1,n-1)+' ('+(n-mid+1)+' stops)</button>';
+  } else {
+    const t = Math.ceil(n / 3);
+    const m1 = t, m2 = t * 2;
+    html += '<div style="font-size:12px;font-weight:600;color:var(--gray);margin:8px 0 4px">Open in Google Maps (Transit)</div>';
+    html += '<button class="btn btn-secondary btn-full" style="margin-bottom:4px;font-size:12px" onclick="openGoogleMapsLeg(0,'+(m1-1)+')">Leg 1: '+getNames(0,m1-1)+' ('+m1+' stops)</button>';
+    html += '<button class="btn btn-secondary btn-full" style="margin-bottom:4px;font-size:12px" onclick="openGoogleMapsLeg('+(m1-1)+','+(Math.min(m2,n)-1)+')">Leg 2: '+getNames(m1-1,Math.min(m2,n)-1)+' ('+(Math.min(m2,n)-m1+1)+' stops)</button>';
+    if (m2 < n) html += '<button class="btn btn-secondary btn-full" style="font-size:12px" onclick="openGoogleMapsLeg('+(m2-1)+','+(n-1)+')">Leg 3: '+getNames(m2-1,n-1)+' ('+(n-m2+1)+' stops)</button>';
+  }
+  el.innerHTML = html;
 }
 
 function navigateTo(id) {
