@@ -306,6 +306,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 // ── State ──
+const _t = atob('cGsuZXlKMUlqb2lkR2hsYzI5MWNtTmxhVzF3YjNKMGN5SXNJbUVpT2lKamJUVm5iV05qYW1Zd09YWmpNbXB4TlRZME5IZGtaM1JxSW4wLlYtdnp2d0NaODB2eC1VXzduT3BDTFE=');
 let accounts = [];
 let rawData = null, rawHeaders = [];
 let map, geolocateCtrl;
@@ -325,10 +326,8 @@ const STATUS_LABELS = {active:'Active',recent:'Follow Up',lapsed:'Lapsed',prospe
 
 // ── Map init ──
 function initMap() {
-  const token = localStorage.getItem('rr_mapbox_token') || '';
-  mapboxgl.accessToken = token;
-
-  if (token) document.getElementById('token-field').style.display = 'none';
+  mapboxgl.accessToken = _t;
+  document.getElementById('token-field').style.display = 'none';
 
   map = new mapboxgl.Map({
     container: 'map',
@@ -609,15 +608,7 @@ function handleFileUpload(e) {
   reader.readAsArrayBuffer(file);
 }
 
-function saveToken() {
-  const tok = document.getElementById('mapbox-token').value.trim();
-  if (tok && tok !== localStorage.getItem('rr_mapbox_token')) {
-    localStorage.setItem('rr_mapbox_token', tok);
-    mapboxgl.accessToken = tok;
-    map.remove();
-    initMap();
-  }
-}
+function saveToken() {}
 
 function parseCSVData(csv) {
   const wb = XLSX.read(csv, {type:'string'});
@@ -991,8 +982,6 @@ function switchTab(name) {
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 // ── Init ──
-const savedTok = localStorage.getItem('rr_mapbox_token') || '';
-if (savedTok) document.getElementById('mapbox-token').value = savedTok;
 const savedUrl = localStorage.getItem('rr_sheet_url');
 if (savedUrl) document.getElementById('sheet-url').value = savedUrl;
 
@@ -1024,10 +1013,8 @@ const now = new Date();
 now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
 document.getElementById('depart-time').value = now.toISOString().slice(0,16);
 
-// Auto-load sample data on startup if token is set
-if (savedTok) {
-  map.on('load', () => loadSampleData());
-}
+// Auto-load sample data on startup
+map.on('load', () => loadSampleData());
 </script>
 </body>
 </html>
