@@ -169,6 +169,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <button class="tab active" data-tab="nearby" onclick="switchTab('nearby')">Near Me</button>
     <button class="tab" data-tab="all" onclick="switchTab('all')">All</button>
     <button class="tab" data-tab="route" onclick="switchTab('route')">Route</button>
+    <button class="tab" data-tab="plan" onclick="switchTab('plan')">Plan</button>
   </div>
   <div id="tab-nearby" class="tab-content active">
     <div id="nearby-list"><div class="empty"><div class="icon">&#128205;</div><p>Load your accounts and enable location to see nearby stops.</p></div></div>
@@ -218,6 +219,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
       <div id="leg-buttons"></div>
       <button class="btn btn-secondary btn-full" onclick="exportRoute()">Export CSV</button>
     </div>
+  </div>
+  <div id="tab-plan" class="tab-content">
+    <div id="plan-content"><div class="empty"><div class="icon">&#128203;</div><p>Add stops and optimize your route to see the day plan.</p></div></div>
   </div>
 </div>
 
@@ -999,7 +1003,113 @@ function togglePanel() { document.getElementById('panel').classList.toggle('expa
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.toggle('active',tc.id==='tab-'+name));
-  if (name==='nearby') renderNearbyList(); if (name==='all') renderAllList(); if (name==='route') renderRouteTab();
+  if (name==='nearby') renderNearbyList(); if (name==='all') renderAllList(); if (name==='route') renderRouteTab(); if (name==='plan') renderPlan();
+}
+
+function renderPlan() {
+  const el = document.getElementById('plan-content');
+  if (!routeStops.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">&#128203;</div><p>Add stops and optimize your route to see the day plan.</p></div>';
+    return;
+  }
+
+  const timeInput = document.getElementById('depart-time').value;
+  const dateStr = timeInput ? new Date(timeInput).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) : 'Today';
+  const timeStr = timeInput ? new Date(timeInput).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+
+  let totalDist = 0, totalTime = 0;
+  if (routeOptimized && routeLegs.length) {
+    totalDist = routeLegs.reduce((s,l)=>s+l.distance,0);
+    totalTime = routeLegs.reduce((s,l)=>s+l.duration,0);
+  }
+
+  const statusCounts = {active:0, recent:0, lapsed:0, prospect:0};
+  const subwayLines = new Set();
+
+  let stopsHtml = '';
+  routeStops.forEach((id, i) => {
+    const acc = accounts.find(a=>a.id===id);
+    if (!acc) return;
+    statusCounts[acc.status] = (statusCounts[acc.status]||0) + 1;
+
+    let subBadges = '';
+    if (acc._nearestStation) {
+      subBadges = formatSubwayBadges(acc._nearestStation.lines);
+      acc._nearestStation.lines.replace(/[^A-Z0-9]/gi,' ').toUpperCase().split(/\s+/).filter(Boolean).forEach(l => subwayLines.add(l));
+    }
+
+    const days = acc.lastOrder ? Math.round((Date.now()-acc.lastOrder.getTime())/86400000) : null;
+    const lastStr = days !== null ? days+' days ago' : 'Never ordered';
+    const badge = '<span class="badge badge-'+acc.status+'" style="font-size:10px">'+STATUS_LABELS[acc.status]+'</span>';
+
+    let legInfo = '';
+    if (routeOptimized && routeLegs[i] && routeLegs[i].distance > 0) {
+      const mi = (routeLegs[i].distance/1609.34).toFixed(1);
+      const mn = Math.round(routeLegs[i].duration/60);
+      legInfo = '<div style="font-size:11px;color:var(--blue);margin-top:2px">↓ '+mi+' mi walk · ~'+mn+' min</div>';
+    }
+
+    stopsHtml += '<div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">';
+    stopsHtml += '<div style="width:28px;height:28px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">'+(i+1)+'</div>';
+    stopsHtml += '<div style="flex:1;min-width:0">';
+    stopsHtml += '<div style="font-weight:600;font-size:14px">'+esc(acc.name)+' '+badge+'</div>';
+    stopsHtml += '<div style="font-size:12px;color:var(--muted)">'+esc(acc.address)+'</div>';
+    stopsHtml += '<div style="font-size:12px;color:var(--muted)">Last order: '+lastStr+'</div>';
+    if (acc.notes) stopsHtml += '<div style="font-size:12px;color:var(--text);font-style:italic;margin-top:2px">'+esc(acc.notes)+'</div>';
+    if (subBadges) stopsHtml += '<div style="margin-top:4px">'+subBadges+' <span style="font-size:11px;color:var(--muted)">'+esc(acc._nearestStation.name)+'</span></div>';
+    stopsHtml += legInfo;
+    stopsHtml += '</div></div>';
+  });
+
+  const miTotal = (totalDist/1609.34).toFixed(1);
+  const minTotal = Math.round(totalTime/60);
+  const linesList = [...subwayLines].sort().join(', ');
+
+  let html = '<div style="padding:4px 0">';
+  html += '<div style="font-size:18px;font-weight:700;margin-bottom:2px">'+dateStr+'</div>';
+  if (timeStr) html += '<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Departing '+timeStr+'</div>';
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
+  html += '<div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--blue)">'+routeStops.length+'</div><div style="font-size:11px;color:var(--muted)">Stops</div></div>';
+  html += '<div style="background:var(--bg);border-radius:8px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--blue)">'+(routeOptimized?miTotal+' mi':'—')+'</div><div style="font-size:11px;color:var(--muted)">Walking</div></div>';
+  html += '</div>';
+
+  if (statusCounts.lapsed || statusCounts.prospect) {
+    html += '<div style="background:#fef3c7;border-radius:8px;padding:10px;margin-bottom:12px;font-size:13px">';
+    const parts = [];
+    if (statusCounts.lapsed) parts.push('<b>'+statusCounts.lapsed+'</b> lapsed');
+    if (statusCounts.prospect) parts.push('<b>'+statusCounts.prospect+'</b> prospect');
+    if (statusCounts.recent) parts.push('<b>'+statusCounts.recent+'</b> need follow-up');
+    html += 'Priority: '+parts.join(', ')+'</div>';
+  }
+
+  if (linesList) html += '<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Subway lines along route: '+formatSubwayBadges(linesList)+'</div>';
+
+  html += stopsHtml;
+  html += '<button class="btn btn-secondary btn-full" style="margin-top:12px" onclick="sharePlan()">Copy Plan to Clipboard</button>';
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function sharePlan() {
+  const timeInput = document.getElementById('depart-time').value;
+  const dateStr = timeInput ? new Date(timeInput).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}) : 'Today';
+  let text = 'RouteRunner — '+dateStr+'\n';
+  text += routeStops.length+' stops\n\n';
+  routeStops.forEach((id,i) => {
+    const acc = accounts.find(a=>a.id===id);
+    if (!acc) return;
+    const days = acc.lastOrder ? Math.round((Date.now()-acc.lastOrder.getTime())/86400000)+'d ago' : 'Never';
+    const station = acc._nearestStation ? ' ('+acc._nearestStation.name+')' : '';
+    text += (i+1)+'. '+acc.name+' — '+STATUS_LABELS[acc.status]+' · Last: '+days+station+'\n';
+    if (acc.notes) text += '   '+acc.notes+'\n';
+    text += '   '+acc.address+'\n\n';
+  });
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('#plan-content .btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Plan to Clipboard', 2000);
+  });
 }
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
