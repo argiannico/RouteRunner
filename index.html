@@ -131,6 +131,21 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .empty .icon{font-size:40px;margin-bottom:8px}
 .empty p{font-size:13px;line-height:1.5}
 
+/* AI chat */
+.ai-msg{margin-bottom:12px;max-width:90%}
+.ai-msg.user{margin-left:auto}
+.ai-msg.assistant{margin-right:auto}
+.ai-bubble{padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
+.ai-msg.user .ai-bubble{background:var(--blue);color:#fff;border-bottom-right-radius:4px}
+.ai-msg.assistant .ai-bubble{background:var(--bg);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.ai-msg .ai-label{font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:600}
+.ai-msg.user .ai-label{text-align:right}
+.ai-typing{display:inline-flex;gap:4px;padding:10px 14px}
+.ai-typing span{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1.4s infinite}
+.ai-typing span:nth-child(2){animation-delay:.2s}
+.ai-typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.3}40%{opacity:1}}
+
 /* Mapbox popup overrides */
 .mapboxgl-popup-content{border-radius:10px!important;padding:12px!important;font-family:inherit!important;font-size:13px!important;line-height:1.4!important;box-shadow:0 4px 16px rgba(0,0,0,.12)!important}
 .mapboxgl-popup-close-button{font-size:18px;padding:4px 8px;color:var(--muted)}
@@ -170,6 +185,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <button class="tab" data-tab="all" onclick="switchTab('all')">All</button>
     <button class="tab" data-tab="route" onclick="switchTab('route')">Route</button>
     <button class="tab" data-tab="plan" onclick="switchTab('plan')">Plan</button>
+    <button class="tab" data-tab="ai" onclick="switchTab('ai')">AI</button>
   </div>
   <div id="tab-nearby" class="tab-content active">
     <div id="nearby-list"><div class="empty"><div class="icon">&#128205;</div><p>Load your accounts and enable location to see nearby stops.</p></div></div>
@@ -222,6 +238,29 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   </div>
   <div id="tab-plan" class="tab-content">
     <div id="plan-content"><div class="empty"><div class="icon">&#128203;</div><p>Add stops and optimize your route to see the day plan.</p></div></div>
+  </div>
+  <div id="tab-ai" class="tab-content" style="display:none;flex-direction:column;padding:0">
+    <div id="ai-setup" style="padding:16px">
+      <div class="field">
+        <label>DeepSeek API Key</label>
+        <div class="input-row">
+          <input type="password" id="deepseek-key" placeholder="sk-..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px">
+          <button class="btn btn-primary" onclick="saveDeepSeekKey()">Save</button>
+        </div>
+        <div class="hint">Get one at <a href="https://platform.deepseek.com/api_keys" target="_blank">platform.deepseek.com</a></div>
+      </div>
+    </div>
+    <div id="ai-messages" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
+    <div style="padding:8px 16px 12px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input type="text" id="ai-input" placeholder="Ask about your accounts, route, day plan..." style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit" onkeydown="if(event.key==='Enter')sendAI()">
+      <button class="btn btn-primary" onclick="sendAI()">Send</button>
+    </div>
+    <div style="padding:0 16px 8px;display:flex;gap:4px;flex-wrap:wrap" id="ai-suggestions">
+      <button class="card-btn" style="font-size:11px" onclick="askAI('I have 3 hours in Williamsburg. Who should I visit?')">3hrs in Williamsburg</button>
+      <button class="card-btn" style="font-size:11px" onclick="askAI('Which lapsed accounts should I prioritize this week?')">Priority lapsed</button>
+      <button class="card-btn" style="font-size:11px" onclick="askAI('Plan my day starting from Tribeca heading to Brooklyn')">Plan my day</button>
+      <button class="card-btn" style="font-size:11px" onclick="askAI('Brief me on my next stop')">Prep next stop</button>
+    </div>
   </div>
 </div>
 
@@ -1060,8 +1099,135 @@ function togglePanel() { document.getElementById('panel').classList.toggle('expa
 
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
-  document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.toggle('active',tc.id==='tab-'+name));
+  document.querySelectorAll('.tab-content').forEach(tc => {
+    const isActive = tc.id === 'tab-'+name;
+    tc.classList.toggle('active', isActive);
+    if (tc.id === 'tab-ai') tc.style.display = isActive ? 'flex' : 'none';
+  });
   if (name==='nearby') renderNearbyList(); if (name==='all') renderAllList(); if (name==='route') renderRouteTab(); if (name==='plan') renderPlan();
+  if (name==='ai') initAITab();
+}
+
+// ── AI (DeepSeek) ──
+let aiMessages = [];
+let deepSeekKey = localStorage.getItem('rr_deepseek_key') || '';
+
+function saveDeepSeekKey() {
+  deepSeekKey = document.getElementById('deepseek-key').value.trim();
+  if (deepSeekKey) {
+    localStorage.setItem('rr_deepseek_key', deepSeekKey);
+    document.getElementById('ai-setup').style.display = 'none';
+    addAIMessage('assistant', 'Ready! I know your '+accounts.length+' accounts, route, and location. Ask me anything — route advice, account prep, or day planning.');
+  }
+}
+
+function initAITab() {
+  if (deepSeekKey) {
+    document.getElementById('deepseek-key').value = deepSeekKey;
+    document.getElementById('ai-setup').style.display = 'none';
+    if (!aiMessages.length) addAIMessage('assistant', 'Ready! I know your '+accounts.length+' accounts, route, and location. Ask me anything — route advice, account prep, or day planning.');
+  }
+}
+
+function buildSystemPrompt() {
+  let ctx = 'You are a field sales AI assistant for a wine importer/distributor in NYC. You have access to the user\'s account data, current route, and location. Be concise and actionable — this is used on a phone while walking around.\n\n';
+
+  ctx += '## Accounts ('+accounts.length+' total)\n';
+  const statusSummary = {};
+  accounts.forEach(a => { statusSummary[a.status] = (statusSummary[a.status]||0) + 1; });
+  ctx += 'Status breakdown: '+Object.entries(statusSummary).map(([k,v])=>v+' '+k).join(', ')+'\n\n';
+
+  accounts.forEach(a => {
+    const days = a.lastOrder ? Math.round((Date.now()-a.lastOrder.getTime())/86400000) : null;
+    const station = a._nearestStation ? ' | Near: '+a._nearestStation.name+' ('+a._nearestStation.lines+')' : '';
+    ctx += '- '+a.name+' | '+a.address+' | Status: '+a.status;
+    if (days !== null) ctx += ' | Last order: '+days+' days ago';
+    else ctx += ' | Never ordered';
+    if (a.notes) ctx += ' | Notes: '+a.notes;
+    ctx += station+'\n';
+  });
+
+  if (routeStops.length) {
+    ctx += '\n## Current Route ('+routeStops.length+' stops)\n';
+    routeStops.forEach((id,i) => {
+      const a = accounts.find(x=>x.id===id);
+      if (a) ctx += (i+1)+'. '+a.name+'\n';
+    });
+  }
+
+  if (userLat != null) {
+    ctx += '\n## User Location\nLat: '+userLat.toFixed(5)+', Lng: '+userLng.toFixed(5)+'\n';
+    const nearby = accounts.filter(a=>a.lat).map(a=>({name:a.name, dist:haversine(userLat,userLng,a.lat,a.lng), status:a.status})).sort((a,b)=>a.dist-b.dist).slice(0,5);
+    ctx += 'Nearest accounts: '+nearby.map(a=>a.name+' ('+Math.round(a.dist)+'m, '+a.status+')').join(', ')+'\n';
+  }
+
+  const timeInput = document.getElementById('depart-time').value;
+  if (timeInput) ctx += '\nDeparture time: '+new Date(timeInput).toLocaleString()+'\n';
+
+  ctx += '\nWhen suggesting accounts to visit, consider: status priority (lapsed and prospects first), subway proximity (accounts near the same line), and geographic clustering. Format responses for mobile — short paragraphs, bullet points.';
+  return ctx;
+}
+
+function addAIMessage(role, content) {
+  aiMessages.push({role, content});
+  const el = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg '+role;
+  div.innerHTML = '<div class="ai-label">'+(role==='user'?'You':'RouteRunner AI')+'</div><div class="ai-bubble">'+esc(content)+'</div>';
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function showTyping() {
+  const el = document.getElementById('ai-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg assistant';
+  div.id = 'ai-typing';
+  div.innerHTML = '<div class="ai-bubble ai-typing"><span></span><span></span><span></span></div>';
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function removeTyping() {
+  const t = document.getElementById('ai-typing');
+  if (t) t.remove();
+}
+
+function askAI(text) {
+  document.getElementById('ai-input').value = text;
+  sendAI();
+}
+
+async function sendAI() {
+  const input = document.getElementById('ai-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  if (!deepSeekKey) { alert('Enter your DeepSeek API key first.'); return; }
+
+  input.value = '';
+  addAIMessage('user', msg);
+  showTyping();
+
+  const messages = [{role:'system', content: buildSystemPrompt()}];
+  aiMessages.forEach(m => { if (m.role==='user'||m.role==='assistant') messages.push({role:m.role, content:m.content}); });
+
+  try {
+    const resp = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+deepSeekKey},
+      body: JSON.stringify({model:'deepseek-chat', messages, max_tokens:1024, temperature:0.7})
+    });
+    const data = await resp.json();
+    removeTyping();
+    if (data.choices && data.choices[0]) {
+      addAIMessage('assistant', data.choices[0].message.content);
+    } else if (data.error) {
+      addAIMessage('assistant', 'Error: '+(data.error.message||JSON.stringify(data.error)));
+    }
+  } catch(e) {
+    removeTyping();
+    addAIMessage('assistant', 'Connection error: '+e.message);
+  }
 }
 
 function renderPlan() {
