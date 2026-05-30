@@ -157,6 +157,35 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .popup-btn-route{background:var(--blue);color:#fff}
 .popup-btn-nav{background:var(--bg);color:var(--text)}
 
+/* Aging heat bar on account cards */
+.age-bar{width:4px;border-radius:2px;flex-shrink:0;min-height:100%}
+.account-card{display:flex;gap:10px}
+.account-card .card-body{flex:1;min-width:0}
+
+/* Drag reorder */
+.route-stop{position:relative;transition:background .15s}
+.route-stop.drag-over{background:var(--blue-light);border-radius:8px}
+.drag-handle{cursor:grab;color:var(--muted);font-size:16px;padding:4px;user-select:none;touch-action:none;-webkit-touch-callout:none}
+.drag-handle:active{cursor:grabbing}
+.reorder-btns{display:flex;flex-direction:column;gap:1px}
+.reorder-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:1px 4px;line-height:1}
+.reorder-btn:hover{color:var(--blue)}
+
+/* Visit logging */
+.visit-btn{background:var(--green);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.visit-btn:hover{filter:brightness(.9)}
+.visit-log{font-size:11px;color:var(--muted);margin-top:4px}
+.visit-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px}
+
+/* Saved routes */
+.saved-routes{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.saved-route-item{display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:13px}
+.saved-route-item .sr-name{font-weight:600;flex:1}
+.saved-route-item .sr-meta{font-size:11px;color:var(--muted)}
+.saved-route-item button{background:none;border:none;cursor:pointer;font-size:12px;padding:4px 8px;border-radius:4px}
+.saved-route-item .sr-load{color:var(--blue);font-weight:600}
+.saved-route-item .sr-delete{color:var(--red)}
+
 /* Map markers */
 .marker-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer;transition:transform .15s}
 .marker-circle:hover{transform:scale(1.15)}
@@ -234,7 +263,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
       </div>
       <button class="btn btn-primary btn-full" onclick="optimizeRoute()">Optimize Route (Walking)</button>
       <div id="leg-buttons"></div>
-      <button class="btn btn-secondary btn-full" onclick="exportRoute()">Export CSV</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" style="flex:1" onclick="exportRoute()">Export CSV</button>
+        <button class="btn btn-secondary" style="flex:1" onclick="saveCurrentRoute()">Save Route</button>
+      </div>
+      <div id="saved-routes-section"></div>
     </div>
   </div>
   <div id="tab-plan" class="tab-content">
@@ -358,6 +391,34 @@ let mapReady = false;
 let ALERT_RADIUS = parseInt(localStorage.getItem('rr_alert_radius')) || 250;
 const STATUS_COLORS = {active:'#16a34a',recent:'#d97706',lapsed:'#dc2626',prospect:'#6366f1',unknown:'#94a3b8'};
 const STATUS_LABELS = {active:'Active',recent:'Follow Up',lapsed:'Lapsed',prospect:'Prospect',unknown:'Unknown'};
+
+// Visit log (persisted in localStorage)
+let visitLog = JSON.parse(localStorage.getItem('rr_visits') || '{}');
+function saveVisits() { localStorage.setItem('rr_visits', JSON.stringify(visitLog)); }
+
+// Saved routes (persisted in localStorage)
+let savedRoutes = JSON.parse(localStorage.getItem('rr_saved_routes') || '[]');
+function saveSavedRoutes() { localStorage.setItem('rr_saved_routes', JSON.stringify(savedRoutes)); }
+
+// Aging color — days since last order → color gradient
+function agingColor(lastOrder) {
+  if (!lastOrder) return '#94a3b8';
+  const days = Math.round((Date.now() - lastOrder.getTime()) / 86400000);
+  if (days <= 14) return '#16a34a';
+  if (days <= 30) return '#d97706';
+  if (days <= 60) return '#ea580c';
+  if (days <= 90) return '#dc2626';
+  return '#991b1b';
+}
+function agingLabel(lastOrder) {
+  if (!lastOrder) return 'Never ordered';
+  const days = Math.round((Date.now() - lastOrder.getTime()) / 86400000);
+  if (days <= 14) return days+'d ago';
+  if (days <= 30) return days+'d ago';
+  if (days <= 60) return days+'d ago';
+  if (days <= 90) return days+'d — going cold';
+  return days+'d — lapsed';
+}
 
 // ── Map init ──
 function initMap() {
@@ -778,7 +839,9 @@ function addMarkersToMap() {
 function addMarker(acc, label, color, size) {
   const el = document.createElement('div');
   el.className = 'marker-circle';
-  el.style.cssText = 'background:'+color+';width:'+size+'px;height:'+size+'px;font-size:'+(size>28?13:11)+'px';
+  const aColor = agingColor(acc.lastOrder);
+  const borderColor = (color === '#2563eb') ? '#fff' : aColor;
+  el.style.cssText = 'background:'+color+';width:'+size+'px;height:'+size+'px;font-size:'+(size>28?13:11)+'px;border-color:'+borderColor;
   el.textContent = label;
 
   const popup = new mapboxgl.Popup({offset:18, maxWidth:'260px'}).setHTML(createPopup(acc));
@@ -806,6 +869,7 @@ function createPopup(acc) {
     '<div class="popup-addr">'+esc(acc.address)+'</div>'+orderLine+subwayLine+phone+notes+
     '<div class="popup-btns">'+
     '<button class="popup-btn popup-btn-route" onclick="addToRoute('+acc.id+')">Add to Route</button>'+
+    '<button class="popup-btn" style="background:var(--green);color:#fff" onclick="logVisit('+acc.id+')">Visited</button>'+
     '<button class="popup-btn popup-btn-nav" onclick="navigateTo('+acc.id+')">Directions</button>'+
     '</div></div>';
 }
@@ -865,11 +929,20 @@ function accountCard(acc, showDist) {
   let subway = '';
   if (acc._nearestStation) subway = '<div style="font-size:11px;margin-top:4px">'+formatSubwayBadges(acc._nearestStation.lines)+' <span style="color:var(--muted)">'+esc(acc._nearestStation.name)+'</span></div>';
   const inR = routeStops.includes(acc.id);
+  const aColor = agingColor(acc.lastOrder);
+  const aLabel = agingLabel(acc.lastOrder);
+  const visits = visitLog[acc.name] || [];
+  const lastVisit = visits.length ? visits[visits.length-1] : null;
+  const visitInfo = lastVisit ? '<span class="visit-log"><span class="visit-dot" style="background:var(--green)"></span>Visited '+timeAgo(lastVisit.date)+'</span>' : '';
   return '<div class="account-card" onclick="zoomTo('+acc.id+')">'+
+    '<div class="age-bar" style="background:'+aColor+'" title="'+aLabel+'"></div>'+
+    '<div class="card-body">'+
     '<div class="name">'+esc(acc.name)+'</div><div class="address">'+esc(acc.address)+'</div>'+
-    '<div class="meta">'+badge+dt+ph+'</div>'+subway+
+    '<div style="font-size:11px;color:'+aColor+';font-weight:600;margin-bottom:2px">'+aLabel+'</div>'+
+    '<div class="meta">'+badge+dt+ph+'</div>'+subway+visitInfo+
     '<div class="actions"><button class="card-btn'+(inR?'':' primary')+'" onclick="event.stopPropagation();'+(inR?'removeFromRoute('+acc.id+')':'addToRoute('+acc.id+')')+'">'+(inR?'In Route':'Add to Route')+'</button>'+
-    '<button class="card-btn" onclick="event.stopPropagation();navigateTo('+acc.id+')">Directions</button></div></div>';
+    '<button class="visit-btn" onclick="event.stopPropagation();logVisit('+acc.id+')">Visited</button>'+
+    '<button class="card-btn" onclick="event.stopPropagation();navigateTo('+acc.id+')">Directions</button></div></div></div>';
 }
 
 function zoomTo(id) {
@@ -909,9 +982,17 @@ function renderRouteTab() {
   actions.style.display='flex';
   el.innerHTML = routeStops.map((id,i) => {
     const acc=accounts.find(a=>a.id===id); let leg='';
-    if (routeOptimized&&routeLegs[i]) { const mi=(routeLegs[i].distance/1609.34).toFixed(1), mn=Math.round(routeLegs[i].duration/60); leg='<span class="detail">'+mi+' mi • '+mn+' min drive</span>'; }
-    return '<div class="route-stop"><div class="route-num">'+(i+1)+'</div><div class="route-info"><div class="name">'+esc(acc.name)+'</div>'+leg+'</div><button class="route-remove" onclick="removeFromRoute('+id+')">&times;</button></div>';
+    if (routeOptimized&&routeLegs[i]) { const mi=(routeLegs[i].distance/1609.34).toFixed(1), mn=Math.round(routeLegs[i].duration/60); leg='<span class="detail">'+mi+' mi • '+mn+' min walk</span>'; }
+    const aColor = agingColor(acc.lastOrder);
+    const aLabel = agingLabel(acc.lastOrder);
+    return '<div class="route-stop" draggable="true" ondragstart="dragStart(event,'+i+')" ondragover="dragOver(event)" ondrop="dropStop(event,'+i+')" ondragend="dragEnd(event)">'+
+      '<div class="reorder-btns">'+(i>0?'<button class="reorder-btn" onclick="moveStop('+i+',-1)">&#9650;</button>':'<span class="reorder-btn"></span>')+
+      (i<routeStops.length-1?'<button class="reorder-btn" onclick="moveStop('+i+',1)">&#9660;</button>':'<span class="reorder-btn"></span>')+'</div>'+
+      '<div class="route-num">'+(i+1)+'</div><div class="route-info"><div class="name">'+esc(acc.name)+'</div>'+
+      '<span style="font-size:11px;color:'+aColor+';font-weight:600">'+aLabel+'</span>'+leg+'</div>'+
+      '<button class="route-remove" onclick="removeFromRoute('+id+')">&times;</button></div>';
   }).join('');
+  renderSavedRoutes();
   if (routeOptimized&&routeLegs.length) {
     const td=routeLegs.reduce((s,l)=>s+l.distance,0), tt=routeLegs.reduce((s,l)=>s+l.duration,0);
     document.getElementById('r-stops').textContent=routeStops.length;
@@ -1098,6 +1179,108 @@ function renderDirections() {
   el.innerHTML = html;
 }
 
+// ── Drag-to-reorder ──
+let dragIdx = null;
+function dragStart(e, i) { dragIdx = i; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.style.opacity = '0.4'; }
+function dragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; e.currentTarget.classList.add('drag-over'); }
+function dragEnd(e) { e.currentTarget.style.opacity = '1'; document.querySelectorAll('.route-stop').forEach(el => el.classList.remove('drag-over')); }
+function dropStop(e, targetIdx) {
+  e.preventDefault(); e.currentTarget.classList.remove('drag-over');
+  if (dragIdx === null || dragIdx === targetIdx) return;
+  const item = routeStops.splice(dragIdx, 1)[0];
+  routeStops.splice(targetIdx, 0, item);
+  routeOptimized = false; dragIdx = null;
+  renderRouteTab(); renderAllList(); renderNearbyList();
+}
+function moveStop(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= routeStops.length) return;
+  [routeStops[i], routeStops[j]] = [routeStops[j], routeStops[i]];
+  routeOptimized = false;
+  renderRouteTab(); renderAllList(); renderNearbyList();
+}
+
+// ── Visit logging ──
+function logVisit(id) {
+  const acc = accounts.find(a => a.id === id);
+  if (!acc) return;
+  if (!visitLog[acc.name]) visitLog[acc.name] = [];
+  visitLog[acc.name].push({date: new Date().toISOString(), notes: ''});
+  saveVisits();
+  renderAllList(); renderNearbyList();
+  showToastMsg(acc.name + ' marked as visited');
+}
+
+function showToastMsg(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-dot').style.background = 'var(--green)';
+  document.getElementById('toast-name').textContent = msg;
+  document.getElementById('toast-detail').textContent = '';
+  t.style.display = 'flex';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.round(diff / 60000);
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.round(hrs / 24);
+  if (days < 30) return days + 'd ago';
+  return Math.round(days / 30) + 'mo ago';
+}
+
+function getVisitCount(accName) { return (visitLog[accName] || []).length; }
+function getLastVisit(accName) { const v = visitLog[accName]; return v && v.length ? v[v.length - 1] : null; }
+
+// ── Saved routes ──
+function saveCurrentRoute() {
+  if (!routeStops.length) { alert('No stops to save.'); return; }
+  const name = prompt('Name this route:', 'Route ' + new Date().toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}));
+  if (!name) return;
+  const stopNames = routeStops.map(id => { const a = accounts.find(x => x.id === id); return a ? a.name : null; }).filter(Boolean);
+  savedRoutes.push({name, stops: stopNames, created: new Date().toISOString()});
+  saveSavedRoutes();
+  renderSavedRoutes();
+  showToastMsg('Route "' + name + '" saved');
+}
+
+function loadSavedRoute(idx) {
+  const sr = savedRoutes[idx];
+  if (!sr) return;
+  routeStops = [];
+  sr.stops.forEach(name => {
+    const acc = accounts.find(a => a.name === name);
+    if (acc && !routeStops.includes(acc.id)) routeStops.push(acc.id);
+  });
+  routeOptimized = false;
+  renderRouteTab(); renderAllList(); renderNearbyList();
+  showToastMsg('Loaded "' + sr.name + '" (' + routeStops.length + ' stops)');
+}
+
+function deleteSavedRoute(idx) {
+  savedRoutes.splice(idx, 1);
+  saveSavedRoutes();
+  renderSavedRoutes();
+}
+
+function renderSavedRoutes() {
+  const el = document.getElementById('saved-routes-section');
+  if (!el) return;
+  if (!savedRoutes.length) { el.innerHTML = ''; return; }
+  let html = '<div class="saved-routes"><div style="font-size:12px;font-weight:600;color:var(--gray);margin-bottom:8px">Saved Routes</div>';
+  savedRoutes.forEach((sr, i) => {
+    const date = new Date(sr.created).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    html += '<div class="saved-route-item"><div><div class="sr-name">' + esc(sr.name) + '</div><div class="sr-meta">' + sr.stops.length + ' stops · ' + date + '</div></div>';
+    html += '<button class="sr-load" onclick="loadSavedRoute(' + i + ')">Load</button>';
+    html += '<button class="sr-delete" onclick="deleteSavedRoute(' + i + ')">&#10005;</button></div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 function navigateTo(id) {
   const acc=accounts.find(a=>a.id===id);
   if (acc&&acc.lat) { addToRoute(id); switchTab('route'); }
@@ -1182,6 +1365,14 @@ function buildSystemPrompt() {
     if (days !== null) ctx += ' | Last order: '+days+' days ago';
     else ctx += ' | Never ordered';
     if (a.notes) ctx += ' | Notes: '+a.notes;
+    const visits = visitLog[a.name] || [];
+    if (visits.length) {
+      const lastV = visits[visits.length-1];
+      const vDays = Math.round((Date.now()-new Date(lastV.date).getTime())/86400000);
+      ctx += ' | Visited '+visits.length+'x, last '+vDays+'d ago';
+    } else {
+      ctx += ' | Never visited';
+    }
     ctx += station+'\n';
   });
 
