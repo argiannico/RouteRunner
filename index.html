@@ -411,17 +411,25 @@ function initMap() {
     // Route line source (empty until optimized)
     map.addSource('route-line', {
       type: 'geojson',
-      data: {type:'Feature', geometry:{type:'LineString', coordinates:[]}}
+      data: {type:'FeatureCollection', features:[]}
     });
     map.addLayer({
-      id: 'route-line-bg', type: 'line', source: 'route-line',
+      id: 'route-line-walk', type: 'line', source: 'route-line',
+      filter: ['==', ['get','mode'], 'WALK'],
       layout: {'line-join':'round', 'line-cap':'round'},
-      paint: {'line-color':'#1d4ed8', 'line-width':7, 'line-opacity':0.25}
+      paint: {'line-color':'#6b7280', 'line-width':3, 'line-opacity':0.7, 'line-dasharray':[2,2]}
     });
     map.addLayer({
-      id: 'route-line-fg', type: 'line', source: 'route-line',
+      id: 'route-line-transit-bg', type: 'line', source: 'route-line',
+      filter: ['!=', ['get','mode'], 'WALK'],
       layout: {'line-join':'round', 'line-cap':'round'},
-      paint: {'line-color':'#2563eb', 'line-width':4, 'line-opacity':0.85}
+      paint: {'line-color':['get','color'], 'line-width':8, 'line-opacity':0.25}
+    });
+    map.addLayer({
+      id: 'route-line-transit', type: 'line', source: 'route-line',
+      filter: ['!=', ['get','mode'], 'WALK'],
+      layout: {'line-join':'round', 'line-cap':'round'},
+      paint: {'line-color':['get','color'], 'line-width':5, 'line-opacity':0.9}
     });
 
     // Auto-start GPS
@@ -895,7 +903,7 @@ function renderRouteTab() {
   if (!routeStops.length) {
     el.innerHTML='<div class="empty"><div class="icon">&#128663;</div><p>Tap "Add to Route" on any account to build your run.</p></div>';
     actions.style.display='none'; summary.style.display='none';
-    if (mapReady) map.getSource('route-line').setData({type:'Feature',geometry:{type:'LineString',coordinates:[]}});
+    if (mapReady) map.getSource('route-line').setData({type:'FeatureCollection',features:[]});
     return;
   }
   actions.style.display='flex';
@@ -936,8 +944,8 @@ async function optimizeRoute() {
     routeLegs = data.trips[0].legs.map(l=>({distance:l.distance,duration:l.duration}));
     routeLegs.push({distance:0,duration:0});
 
-    // Draw route
-    map.getSource('route-line').setData(data.trips[0].geometry);
+    // Clear old route lines (OTP will redraw after fetchAllDirections)
+    map.getSource('route-line').setData({type:'FeatureCollection',features:[]});
 
     // Rebuild markers with route numbers
     clearMarkers();
@@ -950,10 +958,12 @@ async function optimizeRoute() {
       addMarker(acc, label, color, size);
     });
 
-    // Fit to route
-    const c = data.trips[0].geometry.coordinates;
-    const b = c.reduce((bn,p) => bn.extend(p), new mapboxgl.LngLatBounds(c[0],c[0]));
-    map.fitBounds(b, {padding:60});
+    // Fit to route stops
+    const routeAccs = routeStops.map(id=>accounts.find(a=>a.id===id)).filter(a=>a&&a.lat);
+    if (routeAccs.length) {
+      const b = routeAccs.reduce((bn,a) => bn.extend([a.lng,a.lat]), new mapboxgl.LngLatBounds([routeAccs[0].lng,routeAccs[0].lat],[routeAccs[0].lng,routeAccs[0].lat]));
+      map.fitBounds(b, {padding:60});
+    }
 
     renderRouteTab();
   } catch(e) { alert('Route optimization error: '+e.message); }
@@ -962,6 +972,42 @@ async function optimizeRoute() {
 
 const OTP_BASE = 'https://otp-mta-prod.camsys-apps.com/otp/routers/default/plan';
 let routeDirections = [];
+let routeItineraries = [];
+
+function decodePolyline(encoded) {
+  const coords = [];
+  let i = 0, lat = 0, lng = 0;
+  while (i < encoded.length) {
+    let b, shift = 0, result = 0;
+    do { b = encoded.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { b = encoded.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coords.push([lng / 1e5, lat / 1e5]);
+  }
+  return coords;
+}
+
+function drawRouteOnMap() {
+  if (!mapReady) return;
+  const features = [];
+  routeItineraries.forEach(itin => {
+    if (!itin) return;
+    itin.legs.forEach(leg => {
+      if (!leg.legGeometry || !leg.legGeometry.points) return;
+      const coords = decodePolyline(leg.legGeometry.points);
+      if (coords.length < 2) return;
+      const color = leg.mode === 'WALK' ? '#6b7280' : (leg.routeColor ? '#'+leg.routeColor : '#2563eb');
+      features.push({
+        type: 'Feature',
+        properties: { mode: leg.mode, color, route: leg.route || '' },
+        geometry: { type: 'LineString', coordinates: coords }
+      });
+    });
+  });
+  map.getSource('route-line').setData({type:'FeatureCollection', features});
+}
 
 async function fetchTransitDirections(fromAcc, toAcc, departTime) {
   const date = departTime ? new Date(departTime) : new Date();
@@ -998,14 +1044,17 @@ async function fetchAllDirections() {
 
   const departTime = document.getElementById('depart-time').value;
   routeDirections = [];
+  routeItineraries = [];
 
   for (let i = 0; i < n - 1; i++) {
     const from = accounts.find(a=>a.id===routeStops[i]);
     const to = accounts.find(a=>a.id===routeStops[i+1]);
-    if (!from||!to||!from.lat||!to.lat) { routeDirections.push(null); continue; }
+    if (!from||!to||!from.lat||!to.lat) { routeDirections.push(null); routeItineraries.push(null); continue; }
     const itin = await fetchTransitDirections(from, to, departTime);
+    routeItineraries.push(itin);
     routeDirections.push(itin ? parseOTPLegs(itin) : null);
   }
+  drawRouteOnMap();
   renderDirections();
 }
 
