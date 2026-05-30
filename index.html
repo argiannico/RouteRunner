@@ -911,7 +911,7 @@ function renderRouteTab() {
     document.getElementById('r-time').textContent=Math.round(tt/60);
     summary.style.display='grid';
   } else summary.style.display='none';
-  renderLegButtons();
+  if (routeOptimized && routeStops.length >= 2) fetchAllDirections();
 }
 
 async function optimizeRoute() {
@@ -960,91 +960,88 @@ async function optimizeRoute() {
   finally { prog.style.display='none'; }
 }
 
-function findNearestStations(lat, lng, count) {
-  if (!subwayStations.length) return [];
-  return subwayStations.map(s => {
-    const [sLng, sLat] = s.geometry.coordinates;
-    return {name: s.properties._name, lines: s.properties._lines, dist: haversine(lat, lng, sLat, sLng), lat: sLat, lng: sLng};
-  }).sort((a,b) => a.dist - b.dist).slice(0, count);
-}
+const OTP_BASE = 'https://otp-mta-prod.camsys-apps.com/otp/routers/default/plan';
+let routeDirections = [];
 
-function getTransitDirection(fromAcc, toAcc) {
-  const dist = haversine(fromAcc.lat, fromAcc.lng, toAcc.lat, toAcc.lng);
-  if (dist < 400) return {type:'walk', dist, text:'Walk ('+Math.round(dist)+'m)'};
-
-  const fromStations = findNearestStations(fromAcc.lat, fromAcc.lng, 5);
-  const toStations = findNearestStations(toAcc.lat, toAcc.lng, 5);
-  if (!fromStations.length || !toStations.length) return {type:'walk', dist, text:'Walk ('+Math.round(dist)+'m)'};
-
-  const parseLine = s => s.replace(/[^A-Z0-9]/gi,' ').toUpperCase().split(/\s+/).filter(Boolean);
-
-  let best = null;
-  for (const fs of fromStations) {
-    const fLines = parseLine(fs.lines);
-    for (const ts of toStations) {
-      const tLines = parseLine(ts.lines);
-      const shared = fLines.filter(l => tLines.includes(l));
-      if (shared.length) {
-        const totalWalk = fs.dist + ts.dist;
-        if (!best || totalWalk < best.totalWalk) {
-          best = {fromStation:fs, toStation:ts, lines:shared, totalWalk};
-        }
-      }
+async function fetchTransitDirections(fromAcc, toAcc, departTime) {
+  const date = departTime ? new Date(departTime) : new Date();
+  const dateStr = date.toISOString().slice(0,10);
+  const timeStr = date.toTimeString().slice(0,5);
+  const url = OTP_BASE+'?fromPlace='+fromAcc.lat+','+fromAcc.lng+'&toPlace='+toAcc.lat+','+toAcc.lng+'&date='+dateStr+'&time='+timeStr+'&mode=TRANSIT,WALK&arriveBy=false&maxWalkDistance=2000';
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.plan && data.plan.itineraries && data.plan.itineraries.length) {
+      return data.plan.itineraries[0];
     }
-  }
-
-  if (best) {
-    const walkTo = Math.round(best.fromStation.dist);
-    const walkFrom = Math.round(best.toStation.dist);
-    return {
-      type:'subway', dist,
-      fromStation: best.fromStation, toStation: best.toStation,
-      lines: best.lines, walkTo, walkFrom,
-      text: 'Walk '+walkTo+'m → '+best.fromStation.name+' → '+best.lines.join('/')+' → '+best.toStation.name+' → Walk '+walkFrom+'m'
-    };
-  }
-
-  // No direct line — suggest nearest stations with a transfer
-  const fs = fromStations[0], ts = toStations[0];
-  return {
-    type:'transfer', dist,
-    fromStation: fs, toStation: ts,
-    fromLines: parseLine(fs.lines), toLines: parseLine(ts.lines),
-    walkTo: Math.round(fs.dist), walkFrom: Math.round(ts.dist),
-    text: 'Walk '+Math.round(fs.dist)+'m → '+fs.name+' ('+parseLine(fs.lines).join('/')+') → transfer → '+ts.name+' ('+parseLine(ts.lines).join('/')+') → Walk '+Math.round(ts.dist)+'m'
-  };
+  } catch(e) { console.log('OTP error:', e); }
+  return null;
 }
 
-function renderLegButtons() {
-  const el = document.getElementById('leg-buttons');
-  const n = routeStops.length;
-  if (n < 2) { el.innerHTML = ''; return; }
+function parseOTPLegs(itinerary) {
+  return itinerary.legs.map(leg => {
+    if (leg.mode === 'WALK') {
+      return {mode:'WALK', dist: Math.round(leg.distance), duration: Math.round(leg.duration/1000/60), to: leg.to.name};
+    } else {
+      const route = leg.route || leg.routeShortName || '';
+      const stops = (leg.intermediateStops || []).length;
+      return {mode: leg.mode, route, from: leg.from.name, to: leg.to.name, stops, duration: Math.round(leg.duration/1000/60), routeColor: leg.routeColor || ''};
+    }
+  });
+}
 
-  let html = '<div style="font-size:12px;font-weight:600;color:var(--gray);margin:12px 0 8px">Directions</div>';
+async function fetchAllDirections() {
+  const n = routeStops.length;
+  if (n < 2) return;
+  const el = document.getElementById('leg-buttons');
+  el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Fetching transit directions...</div>';
+
+  const departTime = document.getElementById('depart-time').value;
+  routeDirections = [];
+
   for (let i = 0; i < n - 1; i++) {
     const from = accounts.find(a=>a.id===routeStops[i]);
     const to = accounts.find(a=>a.id===routeStops[i+1]);
-    if (!from||!to||!from.lat||!to.lat) continue;
-    const dir = getTransitDirection(from, to);
+    if (!from||!to||!from.lat||!to.lat) { routeDirections.push(null); continue; }
+    const itin = await fetchTransitDirections(from, to, departTime);
+    routeDirections.push(itin ? parseOTPLegs(itin) : null);
+  }
+  renderDirections();
+}
+
+function renderDirections() {
+  const el = document.getElementById('leg-buttons');
+  const n = routeStops.length;
+  if (n < 2 || !routeDirections.length) { el.innerHTML = ''; return; }
+
+  let html = '<div style="font-size:12px;font-weight:600;color:var(--gray);margin:12px 0 8px">Itinerary</div>';
+
+  for (let i = 0; i < n - 1; i++) {
+    const from = accounts.find(a=>a.id===routeStops[i]);
+    const to = accounts.find(a=>a.id===routeStops[i+1]);
+    const legs = routeDirections[i];
 
     html += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">';
     html += '<div style="font-size:13px;font-weight:600;margin-bottom:6px">';
     html += '<span style="background:var(--blue);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-right:4px">'+(i+1)+'</span>';
     html += esc(from.name)+' → '+esc(to.name)+'</div>';
 
-    if (dir.type === 'walk') {
-      html += '<div style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">&#128694; '+dir.text+'</div>';
-    } else if (dir.type === 'subway') {
-      html += '<div style="font-size:12px;line-height:1.8">';
-      html += '&#128694; Walk '+dir.walkTo+'m to <b>'+esc(dir.fromStation.name)+'</b><br>';
-      html += '&#128647; Take '+formatSubwayBadges(dir.lines.join(' '))+' to <b>'+esc(dir.toStation.name)+'</b><br>';
-      html += '&#128694; Walk '+dir.walkFrom+'m to destination';
-      html += '</div>';
+    if (!legs) {
+      html += '<div style="font-size:12px;color:var(--muted)">No transit route found</div>';
     } else {
-      html += '<div style="font-size:12px;line-height:1.8">';
-      html += '&#128694; Walk '+dir.walkTo+'m to <b>'+esc(dir.fromStation.name)+'</b> '+formatSubwayBadges(dir.fromLines.join(' '))+'<br>';
-      html += '&#128260; Transfer to '+formatSubwayBadges(dir.toLines.join(' '))+' at <b>'+esc(dir.toStation.name)+'</b><br>';
-      html += '&#128694; Walk '+dir.walkFrom+'m to destination';
+      html += '<div style="font-size:12px;line-height:2">';
+      legs.forEach(leg => {
+        if (leg.mode === 'WALK') {
+          html += '<div style="display:flex;align-items:center;gap:6px;color:var(--muted)">&#128694; Walk '+leg.dist+'m · '+leg.duration+' min → '+esc(leg.to)+'</div>';
+        } else {
+          const routeName = leg.route.replace(/[^A-Z0-9]/gi,'').charAt(0).toUpperCase() || leg.route;
+          const badge = formatSubwayBadges(routeName);
+          const stopsText = leg.stops ? leg.stops+' stop'+(leg.stops>1?'s':'') : '';
+          html += '<div style="display:flex;align-items:center;gap:6px">&#128647; '+badge+' <b>'+esc(leg.from)+'</b> → <b>'+esc(leg.to)+'</b>';
+          if (stopsText) html += ' <span style="color:var(--muted)">('+stopsText+')</span>';
+          html += '</div>';
+        }
+      });
       html += '</div>';
     }
     html += '</div>';
@@ -1328,7 +1325,22 @@ function renderPlan() {
     const badge = '<span class="badge badge-'+acc.status+'" style="font-size:10px">'+STATUS_LABELS[acc.status]+'</span>';
 
     let legInfo = '';
-    if (routeOptimized && routeLegs[i] && routeLegs[i].distance > 0) {
+    if (routeDirections[i] && i < routeStops.length - 1) {
+      legInfo = '<div style="margin-top:6px;padding:8px;background:var(--bg);border-radius:8px;font-size:11px;line-height:1.9">';
+      const nextAcc = accounts.find(a=>a.id===routeStops[i+1]);
+      legInfo += '<div style="font-weight:600;color:var(--gray);margin-bottom:2px">→ '+esc(nextAcc?nextAcc.name:'Next')+'</div>';
+      routeDirections[i].forEach(leg => {
+        if (leg.mode === 'WALK') {
+          legInfo += '<div>&#128694; Walk '+leg.dist+'m · '+leg.duration+' min → '+esc(leg.to)+'</div>';
+        } else {
+          const routeName = leg.route.replace(/[^A-Z0-9]/gi,'').charAt(0).toUpperCase() || leg.route;
+          legInfo += '<div>&#128647; '+formatSubwayBadges(routeName)+' <b>'+esc(leg.from)+'</b> → <b>'+esc(leg.to)+'</b>';
+          if (leg.stops) legInfo += ' ('+leg.stops+' stop'+(leg.stops>1?'s':'')+')';
+          legInfo += '</div>';
+        }
+      });
+      legInfo += '</div>';
+    } else if (routeOptimized && routeLegs[i] && routeLegs[i].distance > 0) {
       const mi = (routeLegs[i].distance/1609.34).toFixed(1);
       const mn = Math.round(routeLegs[i].duration/60);
       legInfo = '<div style="font-size:11px;color:var(--blue);margin-top:2px">↓ '+mi+' mi walk · ~'+mn+' min</div>';
